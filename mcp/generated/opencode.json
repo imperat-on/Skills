@@ -115,6 +115,19 @@
         "@modelcontextprotocol/server-everything@2026.8.31"
       ],
       "enabled": true
+    },
+    "figma": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "figma-developer-mcp@0.13.2",
+        "--stdio"
+      ],
+      "enabled": true,
+      "environment": {
+        "FIGMA_API_KEY": "<token read-only do Figma>"
+      }
     }
   }
 }

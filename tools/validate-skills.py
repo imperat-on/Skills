@@ -17,6 +17,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 SKILLS = ROOT / "skills"
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 LOCAL_PATH_RE = re.compile(r"/(?:home|Users)/[A-Za-z0-9._-]+/")
+# /home/user, /Users/me, /home/<voce>... são exemplos de doc, não caminho de máquina
+PLACEHOLDER_USERS = {"user", "users", "me", "you", "youruser", "username", "usuario",
+                     "<user>", "<voce>", "example", "someone", "your-name"}
 
 def frontmatter(text):
     """Return (mapping, body) or (None, None) when the file is malformed."""
@@ -82,8 +85,10 @@ def main():
                     t = f.read_text(encoding="utf-8", errors="ignore")
                 except Exception:
                     continue
-                if i := LOCAL_PATH_RE.search(t):
-                    warns.append(f"{f.relative_to(ROOT)}: caminho de maquina local '{i.group(0)}'")
+                for i in LOCAL_PATH_RE.finditer(t):
+                    if i.group(0).split("/")[2].lower() not in PLACEHOLDER_USERS:
+                        warns.append(f"{f.relative_to(ROOT)}: caminho de maquina local '{i.group(0)}'")
+                        break
         seen.setdefault(name, []).append(str(rel))
     dup = {k: v for k, v in seen.items() if len(v) > 1}
     for k, v in dup.items():

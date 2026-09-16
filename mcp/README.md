@@ -1,6 +1,6 @@
 # MCPs
 
-Doze servidores recomendados, com **versão conferida no registry em 2026-09-16**
+Treze servidores recomendados, com **versão conferida no registry em 2026-09-16**
 (`npm view <pacote> version`). Uma fonte só — `servers.json` — e um gerador que
 escreve a configuração de cada CLI:
 
@@ -24,9 +24,20 @@ python3 tools/gen-mcp-configs.py --list  # tabela: servidor, pacote, versão, po
 | `filesystem` | `@modelcontextprotocol/server-filesystem@2026.8.31` | Acesso a arquivo fora do sandbox | **médio** |
 | `sentry` | `@sentry/mcp-server@0.39.0` | Stack trace real em vez de print do humano | médio |
 | `github` | remoto `https://api.githubcopilot.com/mcp/` | PR/issue/review estruturado | **alto** |
+| `figma` | `figma-developer-mcp@0.13.2` | Ler layout/tokens do Figma como dado estruturado | médio |
 | `everything` | `@modelcontextprotocol/server-everything@2026.8.31` | Testar se o MCP da sua CLI funciona | nulo |
 
-## Duas armadilhas que custam tempo
+## Servidores "oficiais" que estão arquivados
+
+A pesquisa conferiu o repo `modelcontextprotocol/servers` (90.388★) e ele hoje mantém
+só **7 reference servers**. Os de GitHub, Postgres, SQLite, Slack, Notion, Sentry,
+Puppeteer e Redis estão **arquivados** — o pacote continua instalável (e é o que este
+kit usa no caso do Sentry), mas não recebe correção. Para GitHub, o caminho vivo é o
+servidor da própria GitHub (`ghcr.io/github/github-mcp-server` ou o endpoint remoto),
+**não** o `github-mcp-server@1.8.7` do npm, que é de terceiro (jungchihoon), apesar do
+nome parecer oficial.
+
+## Três armadilhas que custam tempo
 
 1. **Nome de pacote sequestrado no npm.** `mcp-server-git`, `mcp-server-fetch` e
    `mcp-server-time` existem no npm apenas como marcadores
@@ -38,6 +49,10 @@ python3 tools/gen-mcp-configs.py --list  # tabela: servidor, pacote, versão, po
    fixadas de propósito: um servidor MCP roda com as suas credenciais, então
    atualização automática é superfície de ataque. Para atualizar, mude a versão
    no `servers.json`, regenere, leia o changelog.
+3. **O nome do pacote que circula em blog nem sempre existe.** O MCP do Figma é
+   citado como `@glips/figma-context-mcp` — no registry dá **E404**; o pacote real
+   é `figma-developer-mcp`. Antes de colar um MCP no config, confirme com
+   `npm view <pacote> version` (ou `uvx --from <pacote> --help`, na rota Python).
 
 ## Aplicar em cada CLI
 

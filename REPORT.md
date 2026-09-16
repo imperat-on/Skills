@@ -28,7 +28,7 @@ Depois da pesquisa, cada candidata passou por **três filtros de curadoria**:
 1. **Existe e é verificável** — `gh api`, clone, caminho de arquivo conferido.
 2. **Licença permite redistribuir** — MIT ou Apache-2.0; sem licença, fora.
 3. **Cabe no orçamento de contexto** — o Codex corta descrições quando há muitas
-   skills (limite de ~2% da janela), então o kit tem tier `core` (32) e `extra` (91).
+   skills (limite de ~2% da janela), então o kit tem tier `core` (33) e `extra` (96).
 
 ## 2. O que eu validei pessoalmente (não veio de relato de terceiro)
 
@@ -46,6 +46,8 @@ Estrelas medidas via `gh api repos/<repo>` em 2026-09-16:
 | wshobson/agents | 39.729 | 2026-09-14 | MIT |
 | microsoft/playwright-mcp | 37.177 | 2026-09-14 | Apache-2.0 |
 | github/github-mcp-server | 32.974 | 2026-09-16 | MIT |
+| vercel-labs/agent-skills | 31.248 | 2026-08-28 | MIT (só no README) |
+| max-sixty/worktrunk | 7.910 | 2026-09-16 | MIT OR Apache-2.0 |
 | charmbracelet/crush | 28.132 | 2026-09-16 | — |
 | disler/claude-code-hooks-mastery | 3.921 | 2026-03-04 | — |
 
@@ -54,12 +56,12 @@ Arquivos de origem clonados e inventariados: **1.120 `SKILL.md`** nos cinco repo
 traduções espelhadas do ECC — que foram descartadas: 518 dos 1.120 eram cópias
 em zh-CN/ja-JP/ko/tr/es do mesmo conteúdo).
 
-Infraestrutura testada nesta máquina:
+Infraestrutura testada nesta máquina (depois da segunda passada de curadoria):
 
 ```
-python3 tools/validate-skills.py   ->  123 skills, 0 erros, 0 avisos
+python3 tools/validate-skills.py   ->  129 skills, 0 erros, 0 avisos
 bash tools/test-hooks.sh           ->  PASS: 52   FAIL: 0
-python3 tools/gen-mcp-configs.py   ->  12 MCPs, 5 formatos gerados
+python3 tools/gen-mcp-configs.py   ->  13 MCPs, 5 formatos gerados
 ```
 
 ## 3. As decisões de curadoria que mais mudaram o resultado
@@ -85,7 +87,7 @@ Cursor, Crush e Gemini CLI leem esse diretório (documentado em cada doc).
 Instalar uma vez ali cobre cinco CLIs; só Claude Code (`~/.claude/skills`) e
 Hermes (`~/.hermes/skills`) precisam de destino próprio.
 
-**d) Tier em vez de tudo de uma vez.** Instalar 123 skills degrada o disparo
+**d) Tier em vez de tudo de uma vez.** Instalar 129 skills degrada o disparo
 porque as descrições competem pelo mesmo orçamento de contexto (o Codex declara
 o corte). O `core` (32) é o conjunto de uso diário; o resto entra por demanda.
 
@@ -97,7 +99,8 @@ reinstalar nada. `--copy` existe para quem usa CLI que não segue symlink.
 | Candidato | Estrelas | Motivo de exclusão |
 |---|---|---|
 | `anthropics/skills: doc-coauthoring` | — | Única skill do repositório **sem arquivo de licença**. Não redistribuível sem ambiguidade. |
-| `vercel/agent-skills`, `vercel/skills` | — | A pesquisa (dossiê 03) citou "Vercel Agent Skills, 31.248★". Os dois nomes de repo deram **404** na API: o item é falso ou o nome está errado. Fora. |
+| ~~`vercel/agent-skills`~~ → `vercel-labs/agent-skills` | 31.248 | **Correção minha**: procurei em `vercel/*` e tomei 404, e quase descartei o item como fantasma. O repositório existe — é `vercel-labs/agent-skills`. Entrou com 5 skills (`vercel-react-best-practices`, `vercel-composition-patterns`, `web-design-guidelines`, `vercel-react-view-transitions`, `writing-guidelines`). Lição: 404 no nome que EU supus não é prova de inexistência. |
+| `superset-sh/skills` | **3** | O dossiê 03 reportou 14.307★ para `superset-orchestrate`. O `gh api` diz **3 estrelas** e licença `NOASSERTION`. Estrela inflada no relato — fora. Foi o spot-check que pegou. |
 | `github/spec-kit` (spec-driven development) | 137.349 | MIT e excelente, mas tem só **2 `SKILL.md`** (ambos manutenção interna do próprio repo). O valor dele é o fluxo `/specify → /plan → /tasks`, que não é skill — virou recomendação no §6, não dependência. |
 | ECC completo (`--target hermes`, 292 skills) | 260.098 | Já é um instalador próprio, com hooks que resolvem o próprio plugin-root por expressões inline de 700 caracteres. Incluí 55 skills curadas dele em vez de meio sistema. |
 | BMAD completo | 53.104 | 39 skills acopladas (build, review, sprint, epics). Levei 6 que se provaram autocontidas (conferi: nenhuma referencia outra skill `bmad-*`). |
@@ -153,10 +156,17 @@ Apontadas com número medido, para decidir depois:
 
 - Não medi desempenho de skill nenhuma (não rodei evals). Curadoria aqui é
   licença + manutenção ativa + conteúdo verificado + aderência ao que foi pedido.
-- As contagens de `NAO_VALIDADO` nos dossiês são auto-declaradas pelos relatórios
-  de pesquisa; spot-checkei os casos que iam virar dependência (é assim que o
-  `vercel/agent-skills` fantasma e o `doc-coauthoring` sem licença apareceram),
-  mas **não** revalidei os 65 itens marcados.
+- As contagens de `NAO_VALIDADO` nos dossiês são auto-declaradas pelos relatórios de
+  pesquisa. Spot-checkei **todo item que ia virar dependência** e o resultado foi
+  misto: peguei `doc-coauthoring` sem licença, peguei `superset-sh/skills` com 3★
+  contra 14.307★ relatados, e errei feio ao descartar `vercel-labs/agent-skills` por
+  ter procurado na organização errada. Os 65 itens marcados não foram revalidados.
+- Três skills do `vercel-labs/agent-skills` publicam `name` diferente do nome da
+  pasta, violando a regra da spec (`name` == pasta). O validador do kit pegou; a
+  pasta bundlada foi renomeada para casar, sem editar nenhum arquivo.
+- A citação "+90,2% com multi-agente, ~15× tokens" que aparece no dossiê 02 vem de
+  blog de engenharia da Anthropic. **Não medi** — é número de terceiro, útil como
+  ordem de grandeza, não como garantia.
 - Estrelas de repositório grande medem atenção, não qualidade. Um repo de 260k★
   pode ter skill ruim: por isso cada skill foi lida antes de entrar — mas com
   olho de curador, não de benchmark.

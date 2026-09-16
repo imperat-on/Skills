@@ -9,8 +9,14 @@
       "runtime": "node",
       "package": "@upstash/context7-mcp",
       "version": "4.1.1",
-      "command": ["npx", "-y", "@upstash/context7-mcp@4.1.1"],
-      "env": { "CONTEXT7_API_KEY": "<opcional, aumenta rate limit>" }
+      "command": [
+        "npx",
+        "-y",
+        "@upstash/context7-mcp@4.1.1"
+      ],
+      "env": {
+        "CONTEXT7_API_KEY": "<opcional, aumenta rate limit>"
+      }
     },
     "filesystem": {
       "why": "Leitura/escrita de arquivos fora do diretório do projeto quando a CLI roda em sandbox.",
@@ -19,7 +25,12 @@
       "runtime": "node",
       "package": "@modelcontextprotocol/server-filesystem",
       "version": "2026.8.31",
-      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem@2026.8.31", "~/Documents/projects"],
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem@2026.8.31",
+        "~/Documents/projects"
+      ],
       "env": {}
     },
     "memory": {
@@ -29,8 +40,14 @@
       "runtime": "node",
       "package": "@modelcontextprotocol/server-memory",
       "version": "2026.8.31",
-      "command": ["npx", "-y", "@modelcontextprotocol/server-memory@2026.8.31"],
-      "env": { "MEMORY_FILE_PATH": "~/.local/state/mcp-memory/memory.json" }
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-memory@2026.8.31"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "~/.local/state/mcp-memory/memory.json"
+      }
     },
     "sequential-thinking": {
       "why": "Rascunho explícito de raciocínio com revisão de hipótese — útil quando a CLI não tem reasoning nativo.",
@@ -39,7 +56,11 @@
       "runtime": "node",
       "package": "@modelcontextprotocol/server-sequential-thinking",
       "version": "2026.8.31",
-      "command": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking@2026.8.31"],
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking@2026.8.31"
+      ],
       "env": {}
     },
     "git": {
@@ -49,7 +70,12 @@
       "runtime": "python",
       "package": "mcp-server-git",
       "version": "uvx",
-      "command": ["uvx", "mcp-server-git", "--repository", "."],
+      "command": [
+        "uvx",
+        "mcp-server-git",
+        "--repository",
+        "."
+      ],
       "note": "ATENÇÃO: os nomes npm mcp-server-git / mcp-server-fetch / mcp-server-time são placeholders de segurança ('0.0.1-security') publicados por terceiros. Instale pela rota Python (uvx), nunca por npx.",
       "env": {}
     },
@@ -60,7 +86,10 @@
       "runtime": "python",
       "package": "mcp-server-fetch",
       "version": "uvx",
-      "command": ["uvx", "mcp-server-fetch"],
+      "command": [
+        "uvx",
+        "mcp-server-fetch"
+      ],
       "env": {}
     },
     "time": {
@@ -70,7 +99,11 @@
       "runtime": "python",
       "package": "mcp-server-time",
       "version": "uvx",
-      "command": ["uvx", "mcp-server-time", "--local-timezone=America/Sao_Paulo"],
+      "command": [
+        "uvx",
+        "mcp-server-time",
+        "--local-timezone=America/Sao_Paulo"
+      ],
       "env": {}
     },
     "playwright": {
@@ -80,7 +113,11 @@
       "runtime": "node",
       "package": "@playwright/mcp",
       "version": "0.0.81",
-      "command": ["npx", "-y", "@playwright/mcp@0.0.81"],
+      "command": [
+        "npx",
+        "-y",
+        "@playwright/mcp@0.0.81"
+      ],
       "env": {}
     },
     "chrome-devtools": {
@@ -90,7 +127,11 @@
       "runtime": "node",
       "package": "chrome-devtools-mcp",
       "version": "1.9.0",
-      "command": ["npx", "-y", "chrome-devtools-mcp@1.9.0"],
+      "command": [
+        "npx",
+        "-y",
+        "chrome-devtools-mcp@1.9.0"
+      ],
       "env": {}
     },
     "github": {
@@ -100,7 +141,9 @@
       "url": "https://api.githubcopilot.com/mcp/",
       "auth": "OAuth via login da CLI, ou header Authorization: Bearer <GH_PAT>",
       "note": "Alternativa self-hosted: docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server",
-      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "<token com escopo mínimo>" }
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<token com escopo mínimo>"
+      }
     },
     "sentry": {
       "why": "Puxar stack trace e issue real do Sentry em vez de pedir print para o humano.",
@@ -109,8 +152,15 @@
       "runtime": "node",
       "package": "@sentry/mcp-server",
       "version": "0.39.0",
-      "command": ["npx", "-y", "@sentry/mcp-server@0.39.0"],
-      "env": { "SENTRY_HOST": "sentry.io", "SENTRY_ACCESS_TOKEN": "<token>" }
+      "command": [
+        "npx",
+        "-y",
+        "@sentry/mcp-server@0.39.0"
+      ],
+      "env": {
+        "SENTRY_HOST": "sentry.io",
+        "SENTRY_ACCESS_TOKEN": "<token>"
+      }
     },
     "everything": {
       "why": "Servidor de referência com todas as primitivas (tools/resources/prompts). Serve para testar se o MCP da sua CLI está funcionando.",
@@ -119,8 +169,30 @@
       "runtime": "node",
       "package": "@modelcontextprotocol/server-everything",
       "version": "2026.8.31",
-      "command": ["npx", "-y", "@modelcontextprotocol/server-everything@2026.8.31"],
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-everything@2026.8.31"
+      ],
       "env": {}
+    },
+    "figma": {
+      "why": "Ler o layout do Figma (frames, tokens, componentes) como dado estruturado, em vez de o agente adivinhar medidas de um print.",
+      "risk": "Médio: exige token do Figma e expõe os arquivos que você apontar.",
+      "transport": "stdio",
+      "runtime": "node",
+      "package": "figma-developer-mcp",
+      "version": "0.13.2",
+      "command": [
+        "npx",
+        "-y",
+        "figma-developer-mcp@0.13.2",
+        "--stdio"
+      ],
+      "env": {
+        "FIGMA_API_KEY": "<token read-only do Figma>"
+      },
+      "note": "O nome npm NÃO é @glips/figma-context-mcp (404). O correto é figma-developer-mcp."
     }
   }
 }

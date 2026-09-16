@@ -30,6 +30,8 @@ echo "+ sentry"
 if [ "$DRY" = "1" ]; then echo "  prime-agent mcp add sentry --env SENTRY_HOST=sentry.io --env SENTRY_ACCESS_TOKEN=<token> -- npx -y @sentry/mcp-server@0.39.0"; else prime-agent mcp add sentry --env SENTRY_HOST=sentry.io --env SENTRY_ACCESS_TOKEN=<token> -- npx -y @sentry/mcp-server@0.39.0; fi
 echo "+ everything"
 if [ "$DRY" = "1" ]; then echo "  prime-agent mcp add everything -- npx -y @modelcontextprotocol/server-everything@2026.8.31"; else prime-agent mcp add everything -- npx -y @modelcontextprotocol/server-everything@2026.8.31; fi
+echo "+ figma"
+if [ "$DRY" = "1" ]; then echo "  prime-agent mcp add figma --env FIGMA_API_KEY=<token read-only do Figma> -- npx -y figma-developer-mcp@0.13.2 --stdio"; else prime-agent mcp add figma --env FIGMA_API_KEY=<token read-only do Figma> -- npx -y figma-developer-mcp@0.13.2 --stdio; fi
 
 echo
 echo "confira com: prime-agent mcp list"

@@ -5,9 +5,9 @@ aberto **Agent Skills** (`SKILL.md`), para instalar em **Claude Code, Codex,
 Hermes Agent, OpenCode e Prime Agent** — e em qualquer outra CLI que leia o
 padrão. Feito para sobreviver a uma formatação: clona, roda um script, pronto.
 
-- **123 skills** curadas de 6 fontes (29.072 linhas de instrução), todas validadas contra a spec
+- **129 skills** curadas de 8 fontes (29.892 linhas de instrução), todas validadas contra a spec
 - **6 hooks** testados (52 casos automatizados passando) numa política única que roda em várias CLIs
-- **12 MCPs** com versão conferida no registry em 2026-09-16
+- **13 MCPs** com versão conferida no registry em 2026-09-16
 - **Nada de segredo no repo** — chaves vêm sempre de variável de ambiente
 
 Comando único (symlinks, tier core):
@@ -41,8 +41,8 @@ destino padrão, e o symlink mantém tudo atualizado depois de um `git pull`.
 ## Instalação
 
 ```bash
-./install.sh                 # tier core (32 skills) nas CLIs detectadas, via symlink
-./install.sh --tier all      # as 123 skills
+./install.sh                 # tier core (33 skills) nas CLIs detectadas, via symlink
+./install.sh --tier all      # as 129 skills
 ./install.sh --copy          # copia em vez de symlinkar (para CLIs sem suporte a symlink)
 ./install.sh --target prime  # força um destino (agents|claude|hermes|prime|opencode|crush|cursor|gemini)
 ./install.sh --list          # mostra exatamente o que iria para onde
@@ -57,7 +57,7 @@ O instalador nunca apaga nada: se um nome já existe no destino, ele pula e avis
 
 **Por que existe tier:** o Codex limita a lista inicial de skills a ~2% da janela
 de contexto e encurta descrições quando há muitas. Instalar 123 skills de uma vez
-degrada o disparo de todas. O `core` é o conjunto que eu realmente uso; `extra`
+degrada o disparo de todas. O `core` (33) é o conjunto que eu realmente uso; `extra`
 entra por demanda (`--tier all`, ou copiando só o que interessar de `skills/`).
 
 ## O que tem dentro
@@ -65,10 +65,10 @@ entra por demanda (`--tier all`, ou copiando só o que interessar de `skills/`).
 | Categoria | Skills | Para quê |
 |---|---|---|
 | `skills/coding/` | 36 | Teste antes do código, causa raiz antes do patch, review antes do commit, verificação antes de dizer "pronto" |
-| `skills/thinking/` | 26 | Destilar intenção, escrever plano executável, especificar, registrar decisão, pesquisar antes de codar |
+| `skills/thinking/` | 27 | Destilar intenção, escrever plano executável, especificar, registrar decisão, pesquisar antes de codar |
 | `skills/teams/` | 16 | Subagentes com contexto isolado, worktrees paralelos, review por outro agente, handoff |
-| `skills/frontend/` | 23 | Design system, acessibilidade, motion, e2e, QA visual, performance React |
-| `skills/orchestration/` | 22 | Loop autônomo, gates de avaliação, harness, MCP, custo/modelo, orquestração multi-CLI |
+| `skills/frontend/` | 27 | Design system, acessibilidade, motion, e2e, QA visual, performance React |
+| `skills/orchestration/` | 23 | Loop autônomo, gates de avaliação, harness, MCP, custo/modelo, orquestração multi-CLI |
 
 Catálogo completo, com origem, licença e tamanho de cada skill:
 [CATALOG.md](CATALOG.md). Metadado legível por máquina: [manifest.json](manifest.json).
@@ -104,7 +104,7 @@ semana.
 
 ## MCPs
 
-12 servidores com versão fixada e verificada, mais o gerador que escreve a
+13 servidores com versão fixada e verificada, mais o gerador que escreve a
 configuração de cada CLI a partir de uma fonte só:
 
 ```bash
@@ -127,7 +127,7 @@ python3 tools/validate-skills.py    # schema da spec: name/dir, description, fro
 bash tools/test-hooks.sh            # comportamental: os 52 casos dos hooks
 ```
 
-Ambos são stdlib-only. Estado atual nesta máquina: **123 skills, 0 erros, 0
+Ambos são stdlib-only. Estado atual nesta máquina: **129 skills, 0 erros, 0
 avisos; 52/52 casos de hook passando.**
 
 ## Manter e atualizar
@@ -141,8 +141,8 @@ cd ~/Skills && git pull      # symlinks continuam válidos: nada a recopiar
 ## Origem e licenças
 
 Skills vindas de obra/superpowers (MIT), affaan-m/ECC (MIT),
-wshobson/agents (MIT), anthropics/skills (Apache-2.0),
-bmad-code-org/BMAD-METHOD (MIT) e 15 skills pessoais. Crédito por skill, licença,
+wshobson/agents (MIT), vercel-labs/agent-skills (MIT), anthropics/skills (Apache-2.0),
+bmad-code-org/BMAD-METHOD (MIT), max-sixty/worktrunk (MIT/Apache-2.0) e 15 skills pessoais. Crédito por skill, licença,
 estrelas medidas e o que foi alterado em cada arquivo: [SOURCES.md](SOURCES.md).
 O kit em si é MIT.
 

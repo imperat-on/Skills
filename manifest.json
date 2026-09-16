@@ -1,7 +1,7 @@
 {
  "generated_from": "clones --depth 1 dos repos de origem em 2026-09-16",
  "spec": "https://agentskills.io/specification",
- "count": 123,
+ "count": 129,
  "skills": [
   {
    "name": "code-review-excellence",
@@ -524,6 +524,19 @@
    "files": 1
   },
   {
+   "name": "vercel-react-best-practices",
+   "category": "frontend",
+   "tier": "core",
+   "license": "MIT",
+   "author": "Vercel Labs",
+   "source": "https://github.com/vercel-labs/agent-skills",
+   "upstream_path": "agent-skills/skills/react-best-practices/SKILL.md",
+   "upstream_sha256": "71ed7794962fa6e8",
+   "bundled_sha256": "71ed7794962fa6e8",
+   "lines": 150,
+   "files": 76
+  },
+  {
    "name": "accessibility-compliance",
    "category": "frontend",
    "tier": "extra",
@@ -680,6 +693,32 @@
    "files": 3
   },
   {
+   "name": "vercel-composition-patterns",
+   "category": "frontend",
+   "tier": "extra",
+   "license": "MIT",
+   "author": "Vercel Labs",
+   "source": "https://github.com/vercel-labs/agent-skills",
+   "upstream_path": "agent-skills/skills/composition-patterns/SKILL.md",
+   "upstream_sha256": "e38e0eaa609316b1",
+   "bundled_sha256": "e38e0eaa609316b1",
+   "lines": 90,
+   "files": 14
+  },
+  {
+   "name": "vercel-react-view-transitions",
+   "category": "frontend",
+   "tier": "extra",
+   "license": "MIT",
+   "author": "Vercel Labs",
+   "source": "https://github.com/vercel-labs/agent-skills",
+   "upstream_path": "agent-skills/skills/react-view-transitions/SKILL.md",
+   "upstream_sha256": "1520343c8814c972",
+   "bundled_sha256": "1520343c8814c972",
+   "lines": 333,
+   "files": 9
+  },
+  {
    "name": "visual-design-foundations",
    "category": "frontend",
    "tier": "extra",
@@ -756,6 +795,19 @@
    "bundled_sha256": "43b23f19fedc4b25",
    "lines": 272,
    "files": 4
+  },
+  {
+   "name": "web-design-guidelines",
+   "category": "frontend",
+   "tier": "extra",
+   "license": "MIT",
+   "author": "Vercel Labs",
+   "source": "https://github.com/vercel-labs/agent-skills",
+   "upstream_path": "agent-skills/skills/web-design-guidelines/SKILL.md",
+   "upstream_sha256": "f4647ca866a3accf",
+   "bundled_sha256": "9cd169b3ed5ec0fc",
+   "lines": 40,
+   "files": 1
   },
   {
    "name": "webapp-testing",
@@ -1055,6 +1107,19 @@
    "bundled_sha256": "5c7936bd14fab2b5",
    "lines": 69,
    "files": 1
+  },
+  {
+   "name": "worktrunk",
+   "category": "orchestration",
+   "tier": "extra",
+   "license": "MIT OR Apache-2.0",
+   "author": "Max Sixty (max-sixty)",
+   "source": "https://github.com/max-sixty/worktrunk",
+   "upstream_path": "worktrunk/skills/worktrunk/SKILL.md",
+   "upstream_sha256": "1b69b7e3e6fcb3dc",
+   "bundled_sha256": "1b69b7e3e6fcb3dc",
+   "lines": 167,
+   "files": 17
   },
   {
    "name": "dispatching-parallel-agents",
@@ -1587,6 +1652,19 @@
    "upstream_sha256": "d092defef257ce47",
    "bundled_sha256": "8dc4743378ce2ead",
    "lines": 135,
+   "files": 1
+  },
+  {
+   "name": "writing-guidelines",
+   "category": "thinking",
+   "tier": "extra",
+   "license": "MIT",
+   "author": "Vercel Labs",
+   "source": "https://github.com/vercel-labs/agent-skills",
+   "upstream_path": "agent-skills/skills/writing-guidelines/SKILL.md",
+   "upstream_sha256": "89a5f581193289b8",
+   "bundled_sha256": "a8fc6f3e1b2af4d8",
+   "lines": 40,
    "files": 1
   },
   {

@@ -51,3 +51,8 @@ args = ["-y", "@sentry/mcp-server@0.39.0"]
 [mcp_servers.everything]
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-everything@2026.8.31"]
+
+[mcp_servers.figma]
+command = "npx"
+args = ["-y", "figma-developer-mcp@0.13.2", "--stdio"]
+# env: FIGMA_API_KEY = "<token read-only do Figma>"

@@ -120,6 +120,7 @@ do comando antes da redação. Trate o arquivo como dado sensível.
 
 `community/` traz 26 hooks extras coletados na pesquisa (notificação por
 ntfy/Telegram, lint/typecheck no post-tool, TDD guard, cost tracking,
-`PreCompact` snapshot…). Eles **não** passaram pelos 52 testes deste kit e vários
-dependem de `jq`. Use como referência ou copie um de cada vez — o lugar de
-confiar é `scripts/`.
+`PreCompact` snapshot…). Eles têm **selftest próprio** (`bash community/run-selftest.sh`
+— 37 casos, todos passando quando foram escritos), mas **não** passaram pelos 52
+casos deste kit, e vários dependem de `jq` (que você tem em `/usr/bin/jq`). Use
+como referência ou copie um de cada vez — o lugar de confiar é `scripts/`.

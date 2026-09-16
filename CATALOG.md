@@ -1,6 +1,6 @@
 # Catálogo de skills
 
-123 skills, todas verificadas contra a spec Agent Skills (`python3 tools/validate-skills.py`).
+129 skills, todas verificadas contra a spec Agent Skills (`python3 tools/validate-skills.py`).
 
 **core** = instalada por padrão (`install.sh`). **extra** = só com `--tier all` (mantém a lista inicial curta: o Codex corta descrições quando há muitas skills).
 
@@ -47,7 +47,7 @@ Disciplina de engenharia: teste antes do código, causa raiz antes do patch, rev
 | `simplify-code` | extra | 271 | local (skill pessoal, herdada de ~/.hermes/skills) | MIT | Parallel 4-agent cleanup of recent code changes. |
 | `sql-optimization-patterns` | extra | 215 | wshobson/agents | MIT | Master SQL query optimization, indexing strategies, and EXPLAIN analysis to dramatically improve database performance and eliminate slow queries. U... |
 
-## Pensamento e planejamento — 26 skills
+## Pensamento e planejamento — 27 skills
 
 Pensar antes de escrever: destilar a intenção, escrever plano executável, registrar decisão, pesquisar o que já existe.
 
@@ -78,6 +78,7 @@ Pensar antes de escrever: destilar a intenção, escrever plano executável, reg
 | `scan` | extra | 219 | wshobson/agents | MIT | Scans the codebase to generate project-doc.md and AGENTS.md. Use when bootstrapping a new agent-driven repo, refreshing project documentation after... |
 | `strategic-compact` | extra | 157 | affaan-m/ECC | MIT | Suggests manual context compaction at logical intervals to preserve context through task phases rather than arbitrary auto-compaction. Use when a s... |
 | `token-budget-advisor` | extra | 135 | affaan-m/ECC | MIT | >- |
+| `writing-guidelines` | extra | 40 | vercel-labs/agent-skills | MIT | Review docs/prose for Writing Guidelines compliance. Use when asked to "review my docs", "check writing style", "audit prose", "review docs voice a... |
 | `writing-skills` | extra | 680 | obra/superpowers | MIT | Use when creating new skills, editing existing skills, or verifying skills work before deployment |
 
 ## Trabalho em grupo (subagentes) — 16 skills
@@ -103,7 +104,7 @@ Dividir trabalho entre subagentes com contexto isolado, worktrees paralelos e re
 | `team-builder` | extra | 170 | affaan-m/ECC | MIT | Interactive agent picker for composing and dispatching parallel teams. Use when composing and dispatching a parallel team of agents for a task. |
 | `unified-memory` | extra | 200 | affaan-m/ECC | MIT | Share durable, inspectable context and handoffs between Claude, Codex, Hermes, Cursor, OpenCode, and other agents through the local ECC Memory Vaul... |
 
-## Frontend e UI — 23 skills
+## Frontend e UI — 27 skills
 
 Padrões de UI, acessibilidade, motion e teste visual/e2e — para não entregar tela que 'funciona' e parece amadora.
 
@@ -113,6 +114,7 @@ Padrões de UI, acessibilidade, motion e teste visual/e2e — para não entregar
 | `e2e-testing` | core | 328 | affaan-m/ECC | MIT | Playwright E2E testing patterns, Page Object Model, configuration, CI/CD integration, artifact management, and flaky test strategies. Use when writ... |
 | `frontend-design` | core | 72 | anthropics/skills | Apache-2.0 | Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic direction, typography, ... |
 | `make-interfaces-feel-better` | core | 153 | affaan-m/ECC | MIT | Apply concrete design-engineering details that make interfaces feel polished. Use when reviewing or improving UI spacing, typography, borders, shad... |
+| `vercel-react-best-practices` | core | 150 | vercel-labs/agent-skills | MIT | React and Next.js performance optimization guidelines from Vercel Engineering. This skill should be used when writing, reviewing, or refactoring Re... |
 | `accessibility-compliance` | extra | 52 | wshobson/agents | MIT | Implement WCAG 2.2 compliant interfaces with mobile accessibility, inclusive design patterns, and assistive technology support. Use when auditing a... |
 | `browser-qa` | extra | 106 | affaan-m/ECC | MIT | Use this skill to automate visual testing and UI interaction verification using browser automation after deploying features. |
 | `click-path-audit` | extra | 246 | affaan-m/ECC | MIT | Trace every user-facing button/touchpoint through its full state change sequence to find bugs where functions individually work but cancel each oth... |
@@ -125,15 +127,18 @@ Padrões de UI, acessibilidade, motion e teste visual/e2e — para não entregar
 | `react-modernization` | extra | 329 | wshobson/agents | MIT | Upgrade React applications to latest versions, migrate from class components to hooks, and adopt concurrent features. Use when modernizing React co... |
 | `react-performance` | extra | 576 | affaan-m/ECC | MIT | React and Next.js performance optimization patterns adapted from Vercel Engineering's React Best Practices (https://github.com/vercel-labs/agent-sk... |
 | `tailwind-design-system` | extra | 187 | wshobson/agents | MIT | Build scalable design systems with Tailwind CSS v4, design tokens, component libraries, and responsive patterns. Use when creating component librar... |
+| `vercel-composition-patterns` | extra | 90 | vercel-labs/agent-skills | MIT | React composition patterns that scale. Use when refactoring components with |
+| `vercel-react-view-transitions` | extra | 333 | vercel-labs/agent-skills | MIT | Guide for implementing smooth, native-feeling animations using React's View Transition API (`<ViewTransition>` component, `addTransitionType`, and ... |
 | `visual-design-foundations` | extra | 319 | wshobson/agents | MIT | Apply typography, color theory, spacing systems, and iconography principles to create cohesive visual designs. Use when establishing design tokens,... |
 | `visual-edit-precision` | extra | 54 | wshobson/agents | MIT | >- |
 | `vite-patterns` | extra | 451 | affaan-m/ECC | MIT | Vite build tool patterns including config, plugins, HMR, env variables, proxy setup, SSR, library mode, dependency pre-bundling, and build optimiza... |
 | `vue-patterns` | extra | 472 | affaan-m/ECC | MIT | Vue.js 3 Composition API patterns, component architecture, reactivity best practices, Pinia state management, Vue Router navigation, and Nuxt SSR p... |
 | `web-artifacts-builder` | extra | 74 | anthropics/skills | Apache-2.0 | Suite of tools for creating elaborate, multi-component claude.ai HTML artifacts using modern frontend web technologies (React, Tailwind CSS, shadcn... |
 | `web-component-design` | extra | 272 | wshobson/agents | MIT | Master React, Vue, and Svelte component patterns including CSS-in-JS, composition strategies, and reusable component architecture. Use when buildin... |
+| `web-design-guidelines` | extra | 40 | vercel-labs/agent-skills | MIT | Review UI code for Web Interface Guidelines compliance. Use when asked to "review my UI", "check accessibility", "audit design", "review UX", or "c... |
 | `webapp-testing` | extra | 96 | anthropics/skills | Apache-2.0 | Toolkit for interacting with and testing local web applications using Playwright. Supports verifying frontend functionality, debugging UI behavior,... |
 
-## Orquestração de agentes — 22 skills
+## Orquestração de agentes — 23 skills
 
 Loop autônomo, gates de avaliação, harness e MCP: como o agente avalia a si mesmo em vez de só rodar.
 
@@ -161,3 +166,21 @@ Loop autônomo, gates de avaliação, harness e MCP: como o agente avalia a si m
 | `orch-pipeline` | extra | 122 | affaan-m/ECC | MIT | Shared orchestration engine for the orch-* skill family. Defines the gated Research-Plan-TDD-Review-Commit pipeline, the size classifier, the agent... |
 | `plan-orchestrate` | extra | 264 | affaan-m/ECC | MIT | Read a plan document, decompose it into steps, design a per-step agent chain from the ECC catalogue, and emit ready-to-paste /orchestrate custom pr... |
 | `ralphinho-rfc-pipeline` | extra | 69 | affaan-m/ECC | MIT | RFC-driven multi-agent DAG execution pattern with quality gates, merge queues, and work unit orchestration. Use when running RFC-driven multi-agent... |
+| `worktrunk` | extra | 167 | max-sixty/worktrunk | MIT OR Apache-2.0 | Guidance for Worktrunk (the `wt` CLI) — git worktree management, hooks, and config. Load when working out which worktree a `wt` command will act on... |
+
+## Skills que dependem de ferramenta externa
+
+Estas não são autossuficientes: sem o binário/serviço, a instrução continua
+legível, mas o agente não consegue executar o fluxo.
+
+| Skill | Precisa de |
+|---|---|
+| `worktrunk` | CLI `wt` (worktrunk) instalado |
+| `browser-qa`, `e2e-testing`, `dogfood`, `webapp-testing` | navegador / Playwright |
+| `mcp-builder`, `mcp-server-patterns` | SDK do MCP (`@modelcontextprotocol/sdk` ou Python) |
+| `claude-code`, `codex`, `opencode` | a CLI correspondente instalada |
+| `herdr-orchestrator` | Herdr (e os workers em panes) |
+| `vercel-react-best-practices`, `vercel-react-view-transitions` | projeto React 18+/Next |
+| `deep-research` | MCPs `firecrawl` e `exa` |
+
+O resto das skills do catálogo não precisa de nada além de shell e leitura de arquivo.

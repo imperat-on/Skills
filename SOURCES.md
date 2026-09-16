@@ -14,16 +14,30 @@ está escrito que não consegui.
 | [obra/superpowers](https://github.com/obra/superpowers) | 287,594 | MIT | 13 | 2026-09-14 |
 | [anthropics/skills](https://github.com/anthropics/skills) | 176,699 | Apache-2.0 | 6 | 2026-09-10 |
 | [bmad-code-org/BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) | 53,104 | MIT | 6 | 2026-09-16 |
+| [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | 31,248 | MIT (declarada no README) | 5 | 2026-08-28 |
+| [max-sixty/worktrunk](https://github.com/max-sixty/worktrunk) | 7,910 | MIT OR Apache-2.0 | 1 | 2026-09-16 |
 
-Total: **123 skills**, 29072 linhas de `SKILL.md`.
+Total: **129 skills**, 29892 linhas de `SKILL.md`.
 
 Repos que apareceram na pesquisa e **não** viraram dependência (com o motivo) estão em
 [REPORT.md](REPORT.md) §4.
 
+Duas exceções que valem registro:
+
+- **vercel-labs/agent-skills** não tem arquivo `LICENSE` nem metadado no
+  `package.json`; a licença MIT está **declarada numa seção do README**. Aceitei por
+  ser declaração explícita do dono do repositório, não por omissão silenciosa.
+- **worktrunk** é dual `MIT OR Apache-2.0`.
+
+Três skills do `vercel-labs/agent-skills` publicam no frontmatter um `name` diferente
+do nome da pasta (`vercel-react-best-practices` numa pasta `react-best-practices`), o
+que viola a regra "name == pasta" da spec. Aqui a pasta foi renomeada para casar com
+o `name` — nenhum arquivo foi editado.
+
 ## O que foi alterado em cada arquivo
 
 Cada skill é uma cópia fiel do original. A única edição foi **adicionar o campo
-`license:`** no frontmatter quando ele não existia (104 arquivos) — metadado exigido
+`license:`** no frontmatter quando ele não existia (106 arquivos) — metadado exigido
 pela spec Agent Skills e que os repositórios de origem declaram só no nível do repo.
 Nenhuma linha de instrução foi reescrita, resumida ou traduzida.
 
@@ -86,6 +100,7 @@ EOF
 | `e2e-testing` | frontend | core | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 328 |
 | `frontend-design` | frontend | core | [anthropics/skills](https://github.com/anthropics/skills) | Apache-2.0 | 72 |
 | `make-interfaces-feel-better` | frontend | core | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 153 |
+| `vercel-react-best-practices` | frontend | core | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | MIT | 150 |
 | `accessibility-compliance` | frontend | extra | [wshobson/agents](https://github.com/wshobson/agents) | MIT | 52 |
 | `browser-qa` | frontend | extra | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 106 |
 | `click-path-audit` | frontend | extra | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 246 |
@@ -98,12 +113,15 @@ EOF
 | `react-modernization` | frontend | extra | [wshobson/agents](https://github.com/wshobson/agents) | MIT | 329 |
 | `react-performance` | frontend | extra | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 576 |
 | `tailwind-design-system` | frontend | extra | [wshobson/agents](https://github.com/wshobson/agents) | MIT | 187 |
+| `vercel-composition-patterns` | frontend | extra | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | MIT | 90 |
+| `vercel-react-view-transitions` | frontend | extra | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | MIT | 333 |
 | `visual-design-foundations` | frontend | extra | [wshobson/agents](https://github.com/wshobson/agents) | MIT | 319 |
 | `visual-edit-precision` | frontend | extra | [wshobson/agents](https://github.com/wshobson/agents) | MIT | 54 |
 | `vite-patterns` | frontend | extra | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 451 |
 | `vue-patterns` | frontend | extra | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 472 |
 | `web-artifacts-builder` | frontend | extra | [anthropics/skills](https://github.com/anthropics/skills) | Apache-2.0 | 74 |
 | `web-component-design` | frontend | extra | [wshobson/agents](https://github.com/wshobson/agents) | MIT | 272 |
+| `web-design-guidelines` | frontend | extra | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | MIT | 40 |
 | `webapp-testing` | frontend | extra | [anthropics/skills](https://github.com/anthropics/skills) | Apache-2.0 | 96 |
 | `autonomous-loops` | orchestration | core | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 612 |
 | `eval-harness` | orchestration | core | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 306 |
@@ -127,6 +145,7 @@ EOF
 | `orch-pipeline` | orchestration | extra | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 122 |
 | `plan-orchestrate` | orchestration | extra | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 264 |
 | `ralphinho-rfc-pipeline` | orchestration | extra | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 69 |
+| `worktrunk` | orchestration | extra | [max-sixty/worktrunk](https://github.com/max-sixty/worktrunk) | MIT OR Apache-2.0 | 167 |
 | `dispatching-parallel-agents` | teams | core | [obra/superpowers](https://github.com/obra/superpowers) | MIT | 168 |
 | `multi-reviewer-patterns` | teams | core | [wshobson/agents](https://github.com/wshobson/agents) | MIT | 128 |
 | `subagent-driven-development` | teams | core | [obra/superpowers](https://github.com/obra/superpowers) | MIT | 569 |
@@ -168,7 +187,10 @@ EOF
 | `scan` | thinking | extra | [wshobson/agents](https://github.com/wshobson/agents) | MIT | 219 |
 | `strategic-compact` | thinking | extra | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 157 |
 | `token-budget-advisor` | thinking | extra | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 135 |
+| `writing-guidelines` | thinking | extra | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | MIT | 40 |
 | `writing-skills` | thinking | extra | [obra/superpowers](https://github.com/obra/superpowers) | MIT | 680 |
+
+(129 skills; hash de cada arquivo no original em `manifest.json`)
 
 ## Terceiros citados no material de apoio
 

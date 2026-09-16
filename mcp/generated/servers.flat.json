@@ -172,5 +172,23 @@
       "@modelcontextprotocol/server-everything@2026.8.31"
     ],
     "env": {}
+  },
+  "figma": {
+    "why": "Ler o layout do Figma (frames, tokens, componentes) como dado estruturado, em vez de o agente adivinhar medidas de um print.",
+    "risk": "M\u00e9dio: exige token do Figma e exp\u00f5e os arquivos que voc\u00ea apontar.",
+    "transport": "stdio",
+    "runtime": "node",
+    "package": "figma-developer-mcp",
+    "version": "0.13.2",
+    "command": [
+      "npx",
+      "-y",
+      "figma-developer-mcp@0.13.2",
+      "--stdio"
+    ],
+    "env": {
+      "FIGMA_API_KEY": "<token read-only do Figma>"
+    },
+    "note": "O nome npm N\u00c3O \u00e9 @glips/figma-context-mcp (404). O correto \u00e9 figma-developer-mcp."
   }
 }
