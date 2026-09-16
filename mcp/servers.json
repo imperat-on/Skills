@@ -1,0 +1,126 @@
+{
+  "$comment": "Fonte única dos MCPs recomendados. tools/gen-mcp-configs.py gera os arquivos de cada CLI a partir daqui. Versões conferidas no registry em 2026-09-16 (npm view <pkg> version, uvx --from <pkg>).",
+  "verified_at": "2026-09-16",
+  "servers": {
+    "context7": {
+      "why": "Documentação atualizada de bibliotecas/frameworks direto no contexto, em vez de o modelo chutar API de memória de treino.",
+      "risk": "Baixo. Só leitura da web. Envia o nome da lib que você consulta.",
+      "transport": "stdio",
+      "runtime": "node",
+      "package": "@upstash/context7-mcp",
+      "version": "4.1.1",
+      "command": ["npx", "-y", "@upstash/context7-mcp@4.1.1"],
+      "env": { "CONTEXT7_API_KEY": "<opcional, aumenta rate limit>" }
+    },
+    "filesystem": {
+      "why": "Leitura/escrita de arquivos fora do diretório do projeto quando a CLI roda em sandbox.",
+      "risk": "Médio: dá acesso ao que você listar. Sempre restrinja aos diretórios de projeto e nunca ao home inteiro.",
+      "transport": "stdio",
+      "runtime": "node",
+      "package": "@modelcontextprotocol/server-filesystem",
+      "version": "2026.8.31",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem@2026.8.31", "~/Documents/projects"],
+      "env": {}
+    },
+    "memory": {
+      "why": "Memória persistente em grafo de conhecimento entre sessões, compartilhada por qualquer CLI que fale MCP.",
+      "risk": "Baixo. Grava um JSON local. Não use para segredo.",
+      "transport": "stdio",
+      "runtime": "node",
+      "package": "@modelcontextprotocol/server-memory",
+      "version": "2026.8.31",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-memory@2026.8.31"],
+      "env": { "MEMORY_FILE_PATH": "~/.local/state/mcp-memory/memory.json" }
+    },
+    "sequential-thinking": {
+      "why": "Rascunho explícito de raciocínio com revisão de hipótese — útil quando a CLI não tem reasoning nativo.",
+      "risk": "Baixo. Só contexto.",
+      "transport": "stdio",
+      "runtime": "node",
+      "package": "@modelcontextprotocol/server-sequential-thinking",
+      "version": "2026.8.31",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking@2026.8.31"],
+      "env": {}
+    },
+    "git": {
+      "why": "Histórico, diff, blame, log sem o agente montar comando de shell.",
+      "risk": "Baixo (o servidor de referência é read-mostly; veja a versão antes de deixar commitar).",
+      "transport": "stdio",
+      "runtime": "python",
+      "package": "mcp-server-git",
+      "version": "uvx",
+      "command": ["uvx", "mcp-server-git", "--repository", "."],
+      "note": "ATENÇÃO: os nomes npm mcp-server-git / mcp-server-fetch / mcp-server-time são placeholders de segurança ('0.0.1-security') publicados por terceiros. Instale pela rota Python (uvx), nunca por npx.",
+      "env": {}
+    },
+    "fetch": {
+      "why": "Buscar uma URL e devolver markdown limpo — o jeito mais barato de dar web ao agente.",
+      "risk": "Baixo. Requer `uv`/`uvx` no PATH.",
+      "transport": "stdio",
+      "runtime": "python",
+      "package": "mcp-server-fetch",
+      "version": "uvx",
+      "command": ["uvx", "mcp-server-fetch"],
+      "env": {}
+    },
+    "time": {
+      "why": "Fuso, conversão e horário atual — o modelo erra isso com frequência.",
+      "risk": "Baixo.",
+      "transport": "stdio",
+      "runtime": "python",
+      "package": "mcp-server-time",
+      "version": "uvx",
+      "command": ["uvx", "mcp-server-time", "--local-timezone=America/Sao_Paulo"],
+      "env": {}
+    },
+    "playwright": {
+      "why": "Dirigir navegador de verdade: clicar, tirar screenshot, validar UI e rodar e2e sem escrever teste antes.",
+      "risk": "Médio: navega como você. Não faça login em banco com o agente solto.",
+      "transport": "stdio",
+      "runtime": "node",
+      "package": "@playwright/mcp",
+      "version": "0.0.81",
+      "command": ["npx", "-y", "@playwright/mcp@0.0.81"],
+      "env": {}
+    },
+    "chrome-devtools": {
+      "why": "Inspecionar DOM, console, network e performance traces de uma página real.",
+      "risk": "Médio: abre um Chrome com perfil isolado. Mesma ressalva de login.",
+      "transport": "stdio",
+      "runtime": "node",
+      "package": "chrome-devtools-mcp",
+      "version": "1.9.0",
+      "command": ["npx", "-y", "chrome-devtools-mcp@1.9.0"],
+      "env": {}
+    },
+    "github": {
+      "why": "Issues, PRs, review e busca de código como ferramenta estruturada (melhor que o agente martelar `gh` no shell).",
+      "risk": "Alto: o token dá acesso aos seus repos. Prefira o modo read-only e escopos mínimos.",
+      "transport": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "auth": "OAuth via login da CLI, ou header Authorization: Bearer <GH_PAT>",
+      "note": "Alternativa self-hosted: docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server",
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "<token com escopo mínimo>" }
+    },
+    "sentry": {
+      "why": "Puxar stack trace e issue real do Sentry em vez de pedir print para o humano.",
+      "risk": "Médio: expõe dados de erro (que às vezes contêm PII).",
+      "transport": "stdio",
+      "runtime": "node",
+      "package": "@sentry/mcp-server",
+      "version": "0.39.0",
+      "command": ["npx", "-y", "@sentry/mcp-server@0.39.0"],
+      "env": { "SENTRY_HOST": "sentry.io", "SENTRY_ACCESS_TOKEN": "<token>" }
+    },
+    "everything": {
+      "why": "Servidor de referência com todas as primitivas (tools/resources/prompts). Serve para testar se o MCP da sua CLI está funcionando.",
+      "risk": "Nenhum — descarte depois do teste.",
+      "transport": "stdio",
+      "runtime": "node",
+      "package": "@modelcontextprotocol/server-everything",
+      "version": "2026.8.31",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-everything@2026.8.31"],
+      "env": {}
+    }
+  }
+}

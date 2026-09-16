@@ -1,0 +1,41 @@
+MIT License
+
+Copyright (c) 2026 Davi Kolansinsky (imperat-on)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+NOTA SOBRE CONTEÚDO DE TERCEIROS
+
+Esta licença cobre o material original deste repositório (scripts de hook,
+instaladores, ferramentas, documentação e a curadoria como um todo).
+
+As skills em `skills/` são cópias de repositórios de terceiros e continuam sob
+as licenças originais — MIT para obra/superpowers, affaan-m/ECC,
+wshobson/agents e bmad-code-org/BMAD-METHOD; Apache-2.0 para as skills de
+anthropics/skills (o arquivo LICENSE.txt de cada uma dessas veio junto).
+
+Crédito por arquivo, licença e hash do original: SOURCES.md e manifest.json.
+
+Third-party notice in English: the skills under `skills/` are copies of their
+upstream repositories and remain under their original licenses (MIT, and
+Apache-2.0 for the anthropics/skills files, whose LICENSE.txt is bundled).
+See SOURCES.md for per-skill attribution and manifest.json for the upstream
+hash of every file.

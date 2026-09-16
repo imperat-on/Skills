@@ -1,0 +1,14 @@
+# estado local de instalação (nunca versionar)
+.installed
+*.bak-*
+
+# temporários de teste
+/tmp/
+__pycache__/
+*.pyc
+
+# editores
+.vscode/
+.idea/
+*~
+.DS_Store

@@ -1,0 +1,27 @@
+# Bloco para o ~/.hermes/config.yaml (perfil ativo).
+# __HOOKS__ é trocado pelo caminho real de hooks/ quando você roda install-hooks.sh.
+# Schema, protocolo JSON e fail_closed: veja hooks/README.md.
+# Depois de editar, confirme com:  hermes hooks test
+hooks:
+  pre_tool_call:
+    - matcher: "terminal"
+      command: "__HOOKS__/guard-dangerous.py"
+      timeout: 10
+      fail_closed: true
+    - matcher: "write_file|patch|read_file|search_files"
+      command: "__HOOKS__/guard-secrets.py"
+      timeout: 10
+      fail_closed: true
+  post_tool_call:
+    - matcher: "write_file|patch"
+      command: "__HOOKS__/auto-format.sh"
+      timeout: 20
+    - matcher: ".*"
+      command: "__HOOKS__/audit-log.sh"
+      timeout: 10
+  on_session_start:
+    - command: "__HOOKS__/session-context.sh"
+      timeout: 10
+  post_llm_call:
+    - command: "__HOOKS__/notify-stop.sh"
+      timeout: 10

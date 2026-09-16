@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comentario": "Cole em .claude/settings.json (projeto, versionável) ou ~/.claude/settings.json (usuário). Ajuste os caminhos para .claude/hooks/ do seu repo. Nenhum segredo fica aqui: use a chave env (ou exporte no shell) para credenciais de notificação.",
+  "env": {
+    "NTFY_TOPIC": "${NTFY_TOPIC}",
+    "CLAUDE_HOOK_LOG_DIR": "${HOME}/.claude/hook-logs"
+  },
+  "permissions": {
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(~/.claude/settings.json)",
+      "Edit(**/.env)",
+      "Edit(~/.claude/settings.json)",
+      "Bash(rm -rf *)",
+      "Bash(sudo *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pretooluse-block-dangerous-bash.sh", "timeout": 5 },
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pretooluse-git-safety.sh", "timeout": 5 },
+          { "type": "command", "if": "Bash(git commit *)", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pretooluse-commit-message-lint.sh", "timeout": 5 }
+        ]
+      },
+      {
+        "matcher": "Read|Edit|Write|MultiEdit|Bash",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pretooluse-protect-secrets.sh", "timeout": 5 }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|Bash",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pretooluse-tdd-guard.sh", "timeout": 5 }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/pretooluse-compound-bash-guard.py", "timeout": 5 }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/posttooluse-autoformat.sh", "async": true, "timeout": 30 },
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/posttooluse-lint-guard.sh", "timeout": 60 },
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/posttooluse-typecheck-ts.sh", "timeout": 120 }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|Bash|Read",
+        "hooks": [
+          { "type": "command", "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/posttooluse-log-toolcalls.py", "async": true, "timeout": 10 }
+        ]
+      },
+      {
+        "matcher": "WebFetch|WebSearch|Read|Bash",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/posttooluse-injection-guard.sh", "timeout": 10 }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/userpromptsubmit-context-inject.sh", "timeout": 10 }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|fork",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/sessionstart-context-inject.sh", "timeout": 10 }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt|idle_prompt|elicitation_dialog",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/notification-desktop.sh", "timeout": 5 },
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/stop-notify-ntfy.sh", "timeout": 10 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/stop-quality-gate.sh", "timeout": 300 },
+          { "type": "command", "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/stop-cost-tracking.py", "async": true, "timeout": 30 },
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/stop-notify-telegram.sh", "async": true, "timeout": 10 }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/subagentstop-report-validator.sh", "timeout": 5 }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/precompact-snapshot.sh", "timeout": 15 }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/postcompact-reminder.sh", "timeout": 10 }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/sessionend-log.sh", "timeout": 1.5 }
+        ]
+      }
+    ]
+  }
+}

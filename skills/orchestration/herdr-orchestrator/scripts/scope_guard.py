@@ -1,0 +1,802 @@
+#!/usr/bin/env python3
+"""Deterministic scope engine and prevention tooling. stdlib only.
+
+Two layers, both driven by the task contract (scripts/contracts.py):
+
+  Layer A - PREVENTION (mechanical, where the harness genuinely supports it)
+    * `install-hook`   a run-owned pre-commit gate installed *only* into the worker's worktree via
+                       `git config --worktree core.hooksPath` (verified on git 2.55.0: the linked
+                       worktree is blocked, the shared checkout is untouched). Any commit containing
+                       a path outside write_scope, or inside forbidden_scope, is refused.
+    * `plan`           per-kind write-boundary hardening generated from the contract. Adapters are
+                       evidence-based: only mechanisms verified on this host are claimed, and
+                       `verify-launch` re-proves the effective rules before dispatch.
+                       `OPENCODE_PERMISSION` / `OPENCODE_CONFIG_CONTENT` carry an edit deny-by-default
+                       rule set that overrides a project config (verified on opencode 1.18.30);
+                       a plain `OPENCODE_CONFIG` file does NOT (project config wins) and is therefore
+                       never used alone.
+                       Kinds without a verified sub-path mechanism are reported as
+                       `prevention: none` - no invented support.
+
+  Layer B - DETECTION (always, independent of prevention)
+    * `check`          compares `git diff --name-only <base>...<head>` against write_scope and
+                       forbidden_scope and returns SCOPE: PASS/FAIL (text or `--json`).
+    * `staged`         the same comparison for the staged index; used by the pre-commit gate.
+
+Nothing here judges code quality; nothing here integrates branches. Exit codes: 0 pass, 1
+violation/failed check, 2 usage error.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from contracts import (  # noqa: E402
+    load_structured_text, normalize_contract, scope_patterns, validate_contract, now,
+)
+
+ALWAYS_IGNORED = [".orchestrator/**", ".git/**"]
+GLOB_CHARS = "*?["
+
+
+# --------------------------------------------------------------------------- glob matching
+
+def normalize_pattern(pattern: str) -> str:
+    """Accept directories, `./x`, `x/` and glob forms; return a canonical glob."""
+    p = str(pattern).strip().replace("\\", "/")
+    while p.startswith("./"):
+        p = p[2:]
+    p = p.rstrip("/")
+    if not p:
+        return "**"
+    if not any(c in p for c in GLOB_CHARS):
+        return p + "/**"
+    return p
+
+
+def pattern_to_regex(pattern: str) -> re.Pattern:
+    """Translate a glob into a regex. `**` crosses path separators; `*` and `?` do not."""
+    p = normalize_pattern(pattern)
+    out = ["^"]
+    i = 0
+    while i < len(p):
+        ch = p[i]
+        if ch == "*":
+            if i + 1 < len(p) and p[i + 1] == "*":
+                nxt = p[i + 2: i + 3]
+                if nxt == "/":
+                    out.append("(?:.*/)?")
+                    i += 3
+                    continue
+                out.append(".*")
+                i += 2
+                continue
+            out.append("[^/]*")
+            i += 1
+            continue
+        if ch == "?":
+            out.append("[^/]")
+            i += 1
+            continue
+        out.append(re.escape(ch))
+        i += 1
+    out.append("$")
+    return re.compile("".join(out))
+
+
+def path_matches(path: str, pattern: str) -> bool:
+    p = str(path).strip().lstrip("./").replace("\\", "/")
+    if pattern in ("**", "**/*"):
+        return True
+    return bool(pattern_to_regex(pattern).match(p))
+
+
+def matches_any(path: str, patterns) -> bool:
+    return any(path_matches(path, p) for p in patterns)
+
+
+def classify_paths(paths, contract: dict) -> dict:
+    """Split changed paths into allowed / unexpected / forbidden / ignored. Pure and deterministic."""
+    write_scope = scope_patterns(contract, "write_scope")
+    forbidden = scope_patterns(contract, "forbidden_scope")
+    ignore = ALWAYS_IGNORED + scope_patterns(contract, "ignore_scope")
+    out = {"allowed": [], "unexpected": [], "forbidden": [], "ignored": []}
+    violations = []
+    for raw in sorted({str(p).strip() for p in paths if str(p).strip()}):
+        if matches_any(raw, ignore):
+            out["ignored"].append(raw)
+            continue
+        if matches_any(raw, forbidden):
+            out["forbidden"].append(raw)
+            violations.append({"path": raw, "kind": "forbidden",
+                               "detail": "matches forbidden_scope"})
+            continue
+        if matches_any(raw, write_scope):
+            out["allowed"].append(raw)
+            continue
+        out["unexpected"].append(raw)
+        violations.append({"path": raw, "kind": "unexpected",
+                           "detail": "outside write_scope"})
+    out["violations"] = violations
+    return out
+
+
+# --------------------------------------------------------------------------- git helpers
+
+def git(repo, args: list) -> tuple[int, str]:
+    try:
+        p = subprocess.run(["git", *args], cwd=str(repo), capture_output=True, text=True,
+                           timeout=120)
+        return p.returncode, (p.stdout or p.stderr).strip()
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return 127, str(exc)
+
+
+def changed_paths(repo, base: str, head: str = "HEAD") -> tuple[int, list, str]:
+    code, out = git(repo, ["diff", "--name-only", f"{base}...{head}"])
+    if code != 0:
+        return code, [], out
+    return 0, [ln for ln in out.splitlines() if ln.strip()], ""
+
+
+def staged_paths(repo) -> tuple[int, list, str]:
+    code, out = git(repo, ["diff", "--cached", "--name-only"])
+    if code != 0:
+        return code, [], out
+    return 0, [ln for ln in out.splitlines() if ln.strip()], ""
+
+
+def dirty_paths(repo) -> list:
+    """Every path git reports as changed, including individual untracked files (not the dir)."""
+    code, out = git(repo, ["status", "--porcelain", "--untracked-files=all"])
+    if code != 0:
+        return []
+    paths = []
+    for line in out.splitlines():
+        chunk = line[3:].strip()
+        if " -> " in chunk:
+            chunk = chunk.split(" -> ", 1)[1]
+        if chunk:
+            paths.append(chunk.strip('"'))
+    return paths
+
+
+def worktree_clean(path) -> bool | None:
+    code, out = git(path, ["status", "--porcelain"])
+    if code != 0:
+        return None
+    return out.strip() == ""
+
+
+def commit_exists(repo, sha: str) -> bool:
+    if not sha:
+        return False
+    code, _ = git(repo, ["cat-file", "-e", f"{sha}^{{commit}}"])
+    return code == 0
+
+
+# --------------------------------------------------------------------------- checks
+
+def check_scope(contract: dict, *, repo, base: str | None = None, head: str | None = None,
+                include_dirty: bool = False, paths=None) -> dict:
+    """Compare the contract against real changed paths. Returns a machine-readable verdict."""
+    repo = Path(repo)
+    base = base or contract.get("base_commit")
+    head = head or contract.get("branch") or "HEAD"
+    result = {
+        "task_id": contract.get("task_id"),
+        "repo": str(repo),
+        "base": base,
+        "head": head,
+        "status": "UNKNOWN",
+        "changed": [], "allowed": [], "unexpected": [], "forbidden": [], "ignored": [],
+        "violations": [],
+        "include_dirty": bool(include_dirty),
+        "checked_at": now(),
+    }
+    if paths is None:
+        if not base:
+            result["error"] = "contract has no base_commit and none was given (--base)"
+            return result
+        code, paths, err = changed_paths(repo, base, head)
+        if code != 0:
+            result["error"] = f"git diff failed: {err[:200]}"
+            return result
+    paths = list(paths)
+    if include_dirty:
+        for p in dirty_paths(repo):
+            if p not in paths:
+                paths.append(p)
+    cls = classify_paths(paths, contract)
+    result.update({"changed": sorted(paths), **{k: v for k, v in cls.items()}})
+    result["status"] = "PASS" if not cls["violations"] else "FAIL"
+    return result
+
+
+def render_check(result: dict) -> str:
+    if result.get("error"):
+        return f"SCOPE: UNKNOWN\n\nerror: {result['error']}"
+    lines = [f"SCOPE: {result['status']}", ""]
+    lines.append(f"task: {result.get('task_id')}  base: {result.get('base')}  head: {result.get('head')}")
+    lines.append(f"changed: {len(result['changed'])} path(s)")
+    if result["unexpected"]:
+        lines += ["", "unexpected:"] + [f"- {p}" for p in result["unexpected"]]
+    if result["forbidden"]:
+        lines += ["", "forbidden:"] + [f"- {p}" for p in result["forbidden"]]
+    if result["ignored"]:
+        lines += ["", "ignored (declared):"] + [f"- {p}" for p in result["ignored"]]
+    if result["status"] == "PASS":
+        lines += ["", "every changed path is inside write_scope"]
+    else:
+        lines += ["", "SCOPE_VIOLATION: the task may not be integrated until this is resolved"]
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------- contract resolution
+
+def load_contract_file(path) -> dict:
+    text = Path(path).read_text(encoding="utf-8")
+    data = load_structured_text(text)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: contract is not a mapping")
+    return normalize_contract(data)
+
+
+def contract_path_for(repo, task_id: str) -> Path | None:
+    base = Path(repo) / ".orchestrator" / "contracts" / task_id
+    for suffix in (".json", ".yaml", ".yml"):
+        candidate = base.with_suffix(suffix)
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def resolve_contract(repo, file=None, task_id=None) -> dict:
+    if file:
+        return load_contract_file(file)
+    if task_id:
+        path = contract_path_for(repo, task_id)
+        if path is None:
+            raise FileNotFoundError(f"no contract for task {task_id!r} under "
+                                    f"{Path(repo) / '.orchestrator' / 'contracts'}")
+        return load_contract_file(path)
+    raise ValueError("pass --contract FILE or --task-id ID")
+
+
+# --------------------------------------------------------------------------- Layer A: hook gate
+
+HOOK_TEMPLATE = """#!/bin/sh
+# Generated by herdr-orchestrator scope_guard.py for task {task_id!r} (run {run_ref}).
+# Refuses a commit whose staged paths leave the contracted write_scope.
+# Do not edit: regenerate with `scope_guard.py install-hook`.
+set -u
+GUARD={guard!r}
+CONTRACT={contract!r}
+REPO={repo!r}
+WORKTREE={worktree!r}
+CHAIN={chain!r}
+if [ -x "$CHAIN" ]; then
+    "$CHAIN" "$@" || exit $?
+fi
+if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+out=$("$PY" "$GUARD" staged --contract "$CONTRACT" --repo "$REPO" --worktree "$WORKTREE" 2>&1) || {{
+    echo "$out" >&2
+    echo "SCOPE_GUARD: commit refused (scope violation). Report the blocked reason to the" >&2
+    echo "orchestrator; do not widen your scope and do not use --no-verify." >&2
+    exit 1
+}}
+exit 0
+"""
+
+
+def install_hook(contract: dict, worktree, repo, *, guards_dir=None, hooks_dir=None,
+                 chain_existing=True) -> dict:
+    """Install the run-owned pre-commit gate for one worktree.
+
+    Uses `extensions.worktreeConfig` + `git config --worktree core.hooksPath`, so the shared
+    checkout and the project's own hooks path are left alone (verified mechanism, git >= 2.36).
+    """
+    worktree = Path(worktree)
+    repo = Path(repo)
+    task_id = str(contract.get("task_id") or "task")
+    guards = Path(guards_dir) if guards_dir else repo / ".orchestrator" / "guards" / task_id
+    hooks = Path(hooks_dir) if hooks_dir else guards / "hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+
+    code, out = git(worktree, ["rev-parse", "--is-inside-work-tree"])
+    if code != 0 or out != "true":
+        return {"installed": False, "error": f"{worktree} is not a git working tree"}
+
+    # contract snapshot next to the guard so the hook never depends on mutable orchestration state
+    contract_file = guards / "contract.json"
+    contract_file.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
+
+    orig = git(worktree, ["config", "--get", "core.hooksPath"])[1].strip()
+    code, common = git(worktree, ["rev-parse", "--git-common-dir"])
+    common_dir = Path(common) if code == 0 else repo / ".git"
+    if not common_dir.is_absolute():
+        common_dir = (Path(common_dir) if common_dir.is_absolute() else worktree / common_dir)
+    chain = ""
+    if chain_existing:
+        if orig:
+            chain = str(Path(orig) / "pre-commit")
+        else:
+            chain = str(common_dir / "hooks" / "pre-commit")
+        if not (Path(chain).is_file() and Path(chain).stat().st_mode & 0o111):
+            chain = ""
+
+    hook = hooks / "pre-commit"
+    hook.write_text(
+        HOOK_TEMPLATE.format(task_id=task_id, guard=str(Path(__file__).resolve()),
+                             contract=str(contract_file), repo=str(repo), worktree=str(worktree),
+                             chain=chain, run_ref=(contract.get("branch") or "run")),
+        encoding="utf-8")
+    hook.chmod(0o755)
+
+    wt_config = {"extensions.worktreeConfig_was_set": True}
+    code, current = git(worktree, ["config", "--get", "extensions.worktreeConfig"])
+    if code != 0 or current.strip() != "true":
+        git(repo, ["config", "extensions.worktreeConfig", "true"])
+        wt_config["extensions.worktreeConfig_was_set"] = False
+
+    code, out = git(worktree, ["config", "--worktree", "core.hooksPath", str(hooks)])
+    if code != 0:
+        return {"installed": False, "error": f"git config --worktree failed: {out[:200]}"}
+    code, effective = git(worktree, ["config", "--get", "core.hooksPath"])
+    return {
+        "installed": True,
+        "task_id": task_id,
+        "worktree": str(worktree),
+        "hooks_dir": str(hooks),
+        "hook": str(hook),
+        "contract_snapshot": str(contract_file),
+        "effective_hooks_path": effective.strip(),
+        "chained_project_hook": chain or None,
+        "mechanism": "git --worktree core.hooksPath (worktree-scoped)",
+        "shared_config_touched": ([] if wt_config["extensions.worktreeConfig_was_set"]
+                                  else ["extensions.worktreeConfig=true (additive; the run records "
+                                        "it and may revert it at cleanup)"]),
+        "bypass": "git commit --no-verify (a scope violation if used; detected by Layer B)",
+        "installed_at": now(),
+    }
+
+
+def uninstall_hook(worktree) -> dict:
+    worktree = Path(worktree)
+    code, out = git(worktree, ["config", "--worktree", "--unset", "core.hooksPath"])
+    return {"removed": code == 0, "worktree": str(worktree), "detail": out[:200]}
+
+
+# --------------------------------------------------------------------------- Layer A: kind plans
+
+KIND_ADAPTERS = {
+    "opencode": {
+        "mechanism": "permission.edit deny-by-default via OPENCODE_PERMISSION / "
+                     "OPENCODE_CONFIG_CONTENT",
+        "write_boundary": "sub-path",
+        "verified_on": "opencode 1.18.30 on this host: `opencode debug config` reports the injected "
+                       "rules even when the project config says edit=allow (project config wins over "
+                       "a plain OPENCODE_CONFIG file, which is why the env content is used)",
+        "probe": ["opencode", "debug", "config"],
+        "env_var": "OPENCODE_PERMISSION",
+        "alt_env_var": "OPENCODE_CONFIG_CONTENT",
+        "notes": "deny rules are enforced even in --auto mode",
+        "env_status": "rejected",
+        "env_status_detail": "opencode 1.18.30 refuses this shape: permission.edit must not be a plain "
+                             "string map; startup dies with `Expected PermissionActionConfig` and the "
+                             "agent never becomes ready. Do not export the env for this version.",
+    },
+    "codex": {
+        "mechanism": "sandbox workspace-write (writes confined to the worktree)",
+        "write_boundary": "worktree",
+        "verified_on": "codex-cli 0.154.0 `-s workspace-write` (advertised; no sub-path denial)",
+        "probe": None,
+        "env_var": None,
+        "notes": "coarse: keeps the worker inside its worktree, cannot deny one subtree",
+    },
+    "claude": {
+        "mechanism": "settings permission rules (--settings / --permission-mode)",
+        "write_boundary": "unverified",
+        "verified_on": "claude 2.1.263 exposes --settings/--permission-mode, but deny-rule behaviour "
+                       "under bypassPermissions was not verified on this host -> not claimed",
+        "probe": None,
+        "env_var": None,
+        "notes": "treat as detection-only until the deny behaviour is verified in the run",
+    },
+}
+
+
+def opencode_permission(contract: dict) -> dict:
+    """Build the opencode permission block: deny every edit, then allow the contracted tree.
+
+    Order matters: opencode resolves the last matching rule, so forbidden_scope denials are written
+    after the write_scope allows and therefore win even for a path inside the scope.
+    """
+    edit = {"*": "deny"}
+    for pattern in scope_patterns(contract, "write_scope"):
+        if pattern.strip() in ("**", "*"):
+            continue
+        edit[normalize_pattern(pattern)] = "allow"
+    for pattern in scope_patterns(contract, "forbidden_scope"):
+        edit[normalize_pattern(pattern)] = "deny"
+    return {
+        "edit": edit,
+        "external_directory": {"*": "deny"},
+    }
+
+
+def plan_prevention(contract: dict, kind: str, *, out_dir) -> dict:
+    """Write the run-owned guard artifacts for one worker kind. No secrets, no project edits."""
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    adapter = KIND_ADAPTERS.get(str(kind).lower())
+    plan = {
+        "task_id": contract.get("task_id"),
+        "kind": kind,
+        "prevention": "none",
+        "mechanism": None,
+        "launch_env": {},
+        "launch_env_export": [],
+        "verification": None,
+        "artifacts": [],
+        "limitations": [],
+        "generated_at": now(),
+    }
+    if adapter is None:
+        plan["limitations"].append(
+            f"no verified write-boundary mechanism for kind {kind!r} on this host: the worker keeps "
+            f"the whole-worktree boundary only, so out-of-scope writes are caught by detection")
+        return plan
+
+    plan["mechanism"] = adapter["mechanism"]
+    plan["verified_on"] = adapter["verified_on"]
+    if adapter.get("env_status") == "rejected":
+        plan.update({
+            "prevention": "none",
+            "mechanism": None,
+            "launch_env": {},
+            "launch_env_export": [],
+            "limitations": [
+                "the per-kind write boundary cannot be installed: the installed binary version "
+                "rejects the generated configuration ("
+                + str(adapter.get("env_status_detail") or "unverified") + ")",
+                "detection (validate-scope) plus the run-owned commit gate remain in force: "
+                "a committing worker is still blocked on an out-of-scope path",
+            ],
+        })
+        plan_file = out_dir / "prevention-plan.json"
+        plan_file.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+        plan["artifacts"].append(str(plan_file))
+        return plan
+    if adapter["write_boundary"] == "sub-path":
+        permission = opencode_permission(contract)
+        permission_file = out_dir / "opencode-permission.json"
+        permission_file.write_text(json.dumps({"permission": permission}, indent=2) + "\n",
+                                   encoding="utf-8")
+        payload = json.dumps(permission, separators=(",", ":"))
+        plan.update({
+            "prevention": "mechanical",
+            "launch_env": {adapter["env_var"]: payload},
+            "launch_env_export": [f"export {adapter['env_var']}={shlex.quote(payload)}"],
+            "verification": {
+                "exists": bool(adapter.get("probe")),
+                "probe": adapter.get("probe"),
+                "expect": {
+                    "edit_default": "deny",
+                    "edit_allows": sorted(k for k, v in permission["edit"].items() if v == "allow"),
+                    "external_directory_default": "deny",
+                },
+            },
+            "artifacts": [str(permission_file)],
+            "limitations": [
+                "covers the `edit` tool (edit/write/patch) and external_directory; a shell command "
+                "can still write outside the scope",
+                f"the environment variable must reach the worker process "
+                f"({adapter['env_var']} or {adapter['alt_env_var']}); verify before dispatch",
+            ],
+        })
+    elif adapter["write_boundary"] == "worktree":
+        plan.update({
+            "prevention": "coarse",
+            "limitations": ["writes are confined to the worktree, not to write_scope: an "
+                            "out-of-scope path inside the worktree is still possible and is caught "
+                            "by detection"],
+        })
+    else:
+        plan.update({
+            "prevention": "none",
+            "limitations": ["sub-path write denial not verified for this kind on this host: "
+                            "detection + commit gate only"],
+        })
+    plan_file = out_dir / "prevention-plan.json"
+    plan_file.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+    plan["artifacts"].append(str(plan_file))
+    return plan
+
+
+def verify_launch(contract: dict, kind: str, *, cwd=None, observed: str | None = None) -> dict:
+    """Prove the prevention is actually in force before the worker is trusted.
+
+    - `observed` given: compare it against the intended payload (the orchestrator echoes the worker's
+      environment in its shell and passes the real output here).
+    - otherwise: run the kind's own probe (`opencode debug config`) under the intended environment
+      and assert the effective rules deny by default and still allow the contracted scope.
+    """
+    kind = str(kind).lower()
+    adapter = KIND_ADAPTERS.get(kind)
+    result = {"kind": kind, "task_id": contract.get("task_id"), "verified": False,
+              "mechanism": adapter["mechanism"] if adapter else None, "reasons": [],
+              "observed": None, "verified_at": now()}
+    if adapter is None or not adapter.get("env_var"):
+        result["reasons"].append(f"no verifiable write-boundary mechanism for kind {kind!r}")
+        return result
+
+    permission = opencode_permission(contract)
+    intended = json.dumps(permission, separators=(",", ":"))
+
+    if observed is not None:
+        text = observed.strip().strip("'\"")
+        try:
+            got = json.loads(text)
+        except ValueError:
+            result["reasons"].append("observed environment value is not valid JSON")
+            return result
+        result["observed"] = got
+        if adapter.get("env_status") == "rejected":
+            result["reasons"].append(
+                "this kind/version rejects the generated environment ("
+                + str(adapter.get("env_status_detail") or "unverified")
+                + "): record prevention as none instead of launch args")
+            result["verified"] = False
+            return result
+        edit = got.get("edit") if isinstance(got, dict) else None
+        if not isinstance(edit, dict):
+            result["reasons"].append("observed value carries no edit rule map")
+            result["verified"] = False
+            return result
+        if edit.get("*") != "deny":
+            result["reasons"].append("observed edit rules do not deny by default")
+        for pattern in scope_patterns(contract, "write_scope"):
+            if pattern.strip() in ("**", "*"):
+                continue
+            if edit.get(normalize_pattern(pattern)) != "allow":
+                result["reasons"].append(f"observed rules do not allow {pattern!r}")
+        result["verified"] = not result["reasons"]
+        return result
+
+    probe = adapter.get("probe")
+    if not probe:
+        result["reasons"].append("no probe command for this kind")
+        return result
+    env = {adapter["env_var"]: intended}
+    import os
+    full_env = {**os.environ, **env}
+    try:
+        proc = subprocess.run(probe, cwd=str(cwd) if cwd else None, capture_output=True, text=True,
+                              timeout=120, env=full_env)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        result["reasons"].append(f"probe failed to run: {exc}")
+        return result
+    if proc.returncode != 0:
+        result["reasons"].append(f"probe exited {proc.returncode}: {(proc.stderr or '')[:160]}")
+        return result
+    try:
+        effective = json.loads(proc.stdout)
+    except ValueError:
+        result["reasons"].append("probe output is not JSON")
+        return result
+    effective_perm = effective.get("permission") or {}
+    result["observed"] = effective_perm
+    edit = effective_perm.get("edit")
+    if not isinstance(edit, dict) or edit.get("*") != "deny":
+        result["reasons"].append("effective config does not deny edits by default")
+    else:
+        for pattern in scope_patterns(contract, "write_scope"):
+            if pattern.strip() in ("**", "*"):
+                continue
+            if edit.get(normalize_pattern(pattern)) != "allow":
+                result["reasons"].append(f"effective config does not allow {pattern!r}")
+    if effective_perm.get("external_directory") and \
+            effective_perm["external_directory"].get("*") != "deny":
+        result["reasons"].append("effective config does not deny external directories")
+    result["verified"] = not result["reasons"]
+    return result
+
+
+# --------------------------------------------------------------------------- CLI
+
+def _repo(a) -> Path:
+    """Resolve the repository root: a subcommand-level --repo wins over the global one."""
+    return Path(a.repo or getattr(a, "global_repo", ".")).expanduser().resolve()
+
+
+def _load_contract(a) -> dict:
+    repo = _repo(a)
+    contract = resolve_contract(repo, a.contract, a.task_id)
+    if a.worktree:
+        contract["worktree"] = str(Path(a.worktree).expanduser().resolve())
+    return contract
+
+
+def cmd_check(a) -> int:
+    repo = _repo(a)
+    worktree = Path(a.worktree).expanduser().resolve() if a.worktree else repo
+    contract = _load_contract(a)
+    result = check_scope(contract, repo=worktree, base=a.base or contract.get("base_commit"),
+                         head=a.head, include_dirty=a.include_dirty)
+    if a.json:
+        print(json.dumps(result, indent=2))
+    else:
+        print(render_check(result))
+    return 0 if result.get("status") == "PASS" else 1
+
+
+def cmd_staged(a) -> int:
+    repo = Path(a.worktree).expanduser().resolve() if a.worktree else Path(a.repo).expanduser().resolve()
+    contract = _load_contract(a)
+    code, paths, err = staged_paths(repo)
+    if code != 0:
+        result = {"status": "UNKNOWN", "error": f"git diff --cached failed: {err[:200]}",
+                  "task_id": contract.get("task_id")}
+    else:
+        cls = classify_paths(paths, contract)
+        result = {"status": "PASS" if not cls["violations"] else "FAIL",
+                  "task_id": contract.get("task_id"), "changed": sorted(paths), **cls,
+                  "checked_at": now()}
+    if a.json:
+        print(json.dumps(result, indent=2))
+    else:
+        print(render_check({**result, "base": "(staged index)", "head": "(staged index)"}))
+    return 0 if result.get("status") == "PASS" else 1
+
+
+def cmd_validate_contract(a) -> int:
+    contract = _load_contract(a)
+    verdict = validate_contract(contract)
+    if a.json:
+        print(json.dumps(verdict, indent=2))
+    else:
+        print("TASK_CONTRACT: VALID" if verdict["valid"] else "TASK_CONTRACT: INVALID")
+        for e in verdict["errors"]:
+            print(f"  error: {e}")
+        for w in verdict["warnings"]:
+            print(f"  warning: {w}")
+    return 0 if verdict["valid"] else 1
+
+
+def cmd_install_hook(a) -> int:
+    repo = _repo(a)
+    worktree = Path(a.worktree).expanduser().resolve()
+    contract = _load_contract(a)
+    result = install_hook(contract, worktree, repo, guards_dir=a.guards_dir,
+                          hooks_dir=a.hooks_dir)
+    print(json.dumps(result, indent=2))
+    return 0 if result.get("installed") else 1
+
+
+def cmd_uninstall_hook(a) -> int:
+    print(json.dumps(uninstall_hook(Path(a.worktree).expanduser().resolve()), indent=2))
+    return 0
+
+
+def cmd_plan(a) -> int:
+    repo = _repo(a)
+    contract = _load_contract(a)
+    out = Path(a.out).expanduser() if a.out else \
+        repo / ".orchestrator" / "guards" / str(contract.get("task_id") or "task")
+    plan = plan_prevention(contract, a.kind, out_dir=out)
+    print(json.dumps(plan, indent=2))
+    return 0 if plan["prevention"] != "none" else 0
+
+
+def cmd_verify_launch(a) -> int:
+    repo = _repo(a)
+    contract = _load_contract(a)
+    result = verify_launch(contract, a.kind, cwd=a.cwd or contract.get("worktree"),
+                           observed=a.observed)
+    print(json.dumps(result, indent=2))
+    return 0 if result["verified"] else 1
+
+
+def cmd_adapters(a) -> int:
+    payload = {k: {"mechanism": v["mechanism"], "write_boundary": v["write_boundary"],
+                   "verified_on": v["verified_on"], "env_var": v["env_var"]}
+               for k, v in KIND_ADAPTERS.items()}
+    if a.json:
+        print(json.dumps(payload, indent=2))
+    else:
+        for kind, info in payload.items():
+            print(f"{kind:<10} boundary={info['write_boundary']:<10} {info['mechanism']}")
+            print(f"           verified: {info['verified_on']}")
+        print(f"{'*':<10} boundary=none       detection + commit gate only")
+    return 0
+
+
+def cmd_glob(a) -> int:
+    ok = path_matches(a.path, a.pattern)
+    print(f"{'MATCH' if ok else 'NO MATCH'}  {a.pattern}  vs  {a.path}")
+    return 0 if ok else 1
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description="Deterministic scope enforcement (contract-driven)")
+    p.add_argument("--repo", dest="global_repo", default=".",
+                   help="repository root (default: cwd); subcommands also accept --repo")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    def add_contract_args(sp):
+        sp.add_argument("--repo", help="repository root (default: the global --repo)")
+        sp.add_argument("--contract", help="contract file (JSON or the YAML subset)")
+        sp.add_argument("--task-id", help="load .orchestrator/contracts/<task-id>.*")
+        sp.add_argument("--worktree", help="worktree to run git in (default: --repo)")
+
+    s = sub.add_parser("check")
+    add_contract_args(s)
+    s.add_argument("--base", help="base ref (default: contract base_commit)")
+    s.add_argument("--head", help="head ref (default: contract branch or HEAD)")
+    s.add_argument("--include-dirty", action="store_true", help="also count uncommitted paths")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_check)
+
+    s = sub.add_parser("staged")
+    add_contract_args(s)
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_staged)
+
+    s = sub.add_parser("validate-contract")
+    add_contract_args(s)
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_validate_contract)
+
+    s = sub.add_parser("install-hook")
+    s.add_argument("--contract")
+    s.add_argument("--task-id")
+    s.add_argument("--worktree", required=True)
+    s.add_argument("--guards-dir")
+    s.add_argument("--hooks-dir")
+    s.set_defaults(func=cmd_install_hook)
+
+    s = sub.add_parser("uninstall-hook")
+    s.add_argument("--worktree", required=True)
+    s.set_defaults(func=cmd_uninstall_hook)
+
+    s = sub.add_parser("plan")
+    add_contract_args(s)
+    s.add_argument("--kind", required=True)
+    s.add_argument("--out")
+    s.set_defaults(func=cmd_plan)
+
+    s = sub.add_parser("verify-launch")
+    add_contract_args(s)
+    s.add_argument("--kind", required=True)
+    s.add_argument("--cwd")
+    s.add_argument("--observed", help="the worker environment value captured by the orchestrator")
+    s.set_defaults(func=cmd_verify_launch)
+
+    s = sub.add_parser("adapters")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_adapters)
+
+    s = sub.add_parser("glob")
+    s.add_argument("--pattern", required=True)
+    s.add_argument("--path", required=True)
+    s.set_defaults(func=cmd_glob)
+
+    a = p.parse_args()
+    try:
+        return a.func(a)
+    except (FileNotFoundError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

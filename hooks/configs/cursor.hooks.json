@@ -1,0 +1,34 @@
+{
+  "$comment": "Bloco para ~/.cursor/hooks.json (ou <repo>/.cursor/hooks.json). ATENÇÃO: este é o único arquivo do kit cujo formato NÃO foi conferido na documentação oficial do fabricante — o schema abaixo vem de um kit de referência da comunidade (affaan-m/ECC, MIT). Teste com --dry-run e ajuste antes de confiar nele.",
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "bash __HOOKS__/session-context.sh",
+        "event": "sessionStart",
+        "description": "Injeta estado do repositório no começo da sessão"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "python3 __HOOKS__/guard-dangerous.py",
+        "event": "beforeShellExecution",
+        "description": "Bloqueia comandos destrutivos"
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "bash __HOOKS__/audit-log.sh",
+        "event": "afterShellExecution",
+        "description": "Registra comandos executados em JSONL"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "bash __HOOKS__/auto-format.sh",
+        "event": "afterFileEdit",
+        "description": "Formata o arquivo editado"
+      }
+    ]
+  }
+}

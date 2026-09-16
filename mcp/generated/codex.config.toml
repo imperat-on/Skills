@@ -1,0 +1,53 @@
+# Cole em ~/.codex/config.toml (ou no .codex/config.toml do projeto).
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp@4.1.1"]
+# env: CONTEXT7_API_KEY = "<opcional, aumenta rate limit>"
+
+[mcp_servers.filesystem]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem@2026.8.31", "~/Documents/projects"]
+
+[mcp_servers.memory]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-memory@2026.8.31"]
+# env: MEMORY_FILE_PATH = "~/.local/state/mcp-memory/memory.json"
+
+[mcp_servers.sequential-thinking]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-sequential-thinking@2026.8.31"]
+
+[mcp_servers.git]
+command = "uvx"
+args = ["mcp-server-git", "--repository", "."]
+
+[mcp_servers.fetch]
+command = "uvx"
+args = ["mcp-server-fetch"]
+
+[mcp_servers.time]
+command = "uvx"
+args = ["mcp-server-time", "--local-timezone=America/Sao_Paulo"]
+
+[mcp_servers.playwright]
+command = "npx"
+args = ["-y", "@playwright/mcp@0.0.81"]
+
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = ["-y", "chrome-devtools-mcp@1.9.0"]
+
+[mcp_servers.github]
+url = "https://api.githubcopilot.com/mcp/"
+# env: GITHUB_PERSONAL_ACCESS_TOKEN = "<token com escopo mínimo>"
+
+[mcp_servers.sentry]
+command = "npx"
+args = ["-y", "@sentry/mcp-server@0.39.0"]
+# env: SENTRY_HOST = "sentry.io"
+# env: SENTRY_ACCESS_TOKEN = "<token>"
+
+[mcp_servers.everything]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-everything@2026.8.31"]

@@ -1,0 +1,47 @@
+{
+  "$comment": "Bloco para mesclar em ~/.claude/settings.json. __HOOKS__ é trocado pelo caminho real em hooks/ quando você roda hooks/install-hooks.sh. Eventos e schema: code.claude.com/docs/en/hooks",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "__HOOKS__/guard-dangerous.py", "timeout": 10 }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Read",
+        "hooks": [
+          { "type": "command", "command": "__HOOKS__/guard-secrets.py", "timeout": 10 }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          { "type": "command", "command": "__HOOKS__/auto-format.sh", "timeout": 20 }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "__HOOKS__/audit-log.sh", "timeout": 10, "async": true }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "__HOOKS__/session-context.sh", "timeout": 10 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "__HOOKS__/notify-stop.sh", "timeout": 10, "async": true }
+        ]
+      }
+    ]
+  }
+}
