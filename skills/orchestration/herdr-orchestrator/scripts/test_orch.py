@@ -1049,5 +1049,98 @@ class TestNumericIdentifiers(OrchTestCase):
         self.assertEqual(r.stderr.strip(), "")                 # ...not a traceback
 
 
+class TestGeneratedArtifactsAreIgnored(OrchTestCase):
+    """Invariant (v1.4): build/cache output is not a scope violation — a live run flagged
+    `__pycache__/` on both workers and the noise hid the real signal."""
+
+    def test_pycache_and_build_dirs_are_ignored(self):
+        from scope_guard import ALWAYS_IGNORED, matches_any   # noqa: PLC0415
+        for path in ("src/__pycache__/stats.cpython-314.pyc", "src/stats.pyc", "node_modules/x/i.js",
+                     "dist/app.js", "target/debug/bin", ".pytest_cache/v/cache/lastfailed"):
+            self.assertTrue(matches_any(path, ALWAYS_IGNORED), f"{path} should be ignored")
+        for path in ("src/stats.py", "tests/test_stats.py", "README.md", "./src/app/main.py"):
+            self.assertFalse(matches_any(path, ALWAYS_IGNORED), f"{path} must NOT be ignored")
+
+    def test_a_single_file_scope_matches_the_file_itself(self):
+        """`write_scope: [src/stats.py]` is the most natural contract a human writes; a live run
+        showed the guard blocking exactly that commit because a bare path meant 'directory'."""
+        from scope_guard import matches_any                # noqa: PLC0415
+        self.assertTrue(matches_any("src/stats.py", ["src/stats.py"]))
+        self.assertTrue(matches_any("src/app", ["src/app"]))            # directory semantics kept
+        self.assertTrue(matches_any("src/app/main.py", ["src/app"]))
+        self.assertFalse(matches_any("src/stats.py", ["src/app"]))
+        self.assertFalse(matches_any("src/stats.py.bak", ["src/stats.py"]))
+        self.assertFalse(matches_any("other/stats.py", ["src/stats.py"]))
+
+    def test_worktree_clean_ignores_generated_output_only(self):
+        from scope_guard import worktree_clean            # noqa: PLC0415
+        wt, _b, _c = self.make_worktree("a")
+        (Path(wt) / "src" / "__pycache__").mkdir(parents=True, exist_ok=True)
+        (Path(wt) / "src" / "__pycache__" / "m.cpython-314.pyc").write_text("x", encoding="utf-8")
+        self.assertTrue(worktree_clean(wt), "generated cache must not make the worktree dirty")
+        (Path(wt) / "src" / "real_change.py").write_text("print(1)\n", encoding="utf-8")
+        self.assertFalse(worktree_clean(wt), "an authored file must still count as dirty")
+
+
+class TestScopeGateIsolation(OrchTestCase):
+    """Invariant (v1.4): the scope gate belongs to ONE worktree, and "installed" may only be
+    claimed after the worktree itself reports the guard. Two live workers once ended up sharing
+    one guard because the install resolved a stale target and still returned installed: true."""
+
+    def test_install_refuses_without_a_recorded_worktree(self):
+        self.init()
+        self.add_task("a")                                   # no worktree recorded yet
+        self.make_contract("a")
+        r = self.orch("guard", "--id", "a", "--install-hook")
+        self.assertNotEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("no worktree recorded", (r.stdout + r.stderr))
+        # and the shared checkout was left alone
+        shared = self.root / ".git" / "config.worktree"
+        self.assertFalse(shared.exists() and "hooksPath" in shared.read_text(encoding="utf-8"),
+                         "the shared checkout must not carry a scope gate")
+
+    def test_install_fails_closed_when_the_worktree_reports_another_guard(self):
+        """The real guarantee: if the write lands somewhere else, install must NOT claim success.
+        Old code returned installed: true here (it never read back)."""
+        import scope_guard                                    # noqa: PLC0415
+        self.init()
+        wt, branch, _commit = self.make_worktree("a")
+        self.add_task("a", mutates=1, scope="src/app/**")
+        self.make_contract("a", worktree=str(wt), branch=branch)
+        contract = scope_guard.resolve_contract(self.root, task_id="a")
+        real_git = scope_guard.git
+
+        def lying_git(repo, args):                            # the worktree reports someone else's hooks
+            if args[:2] == ["config", "--get"] and any("hooksPath" in a for a in args):
+                return 0, "/tmp/someone-elses-guard/hooks"
+            return real_git(repo, args)
+
+        scope_guard.git = lying_git
+        try:
+            out = scope_guard.install_hook(contract, worktree=wt, repo=self.root)
+        finally:
+            scope_guard.git = real_git
+        self.assertFalse(out["installed"], out)
+        self.assertIn("verification failed", out.get("error", ""))
+
+    def test_each_worktree_gets_its_own_gate(self):
+        self.init()
+        wts = {}
+        for tid in ("a", "b"):
+            wt, branch, commit = self.make_worktree(tid)
+            self.add_task(tid, mutates=1, scope="src/app/**")
+            self.make_contract(tid, worktree=str(wt), branch=branch)
+            r = self.orch("guard", "--id", tid, "--install-hook")
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn('"installed": true', r.stdout)
+            wts[tid] = wt
+        paths = {}
+        for tid, wt in wts.items():
+            got = self.gitc("config", "--get", "core.hooksPath", cwd=wt).strip()
+            paths[tid] = got
+            self.assertEqual(got, str(self.root / ".orchestrator" / "guards" / tid / "hooks"))
+        self.assertNotEqual(paths["a"], paths["b"], "two workers must never share one scope gate")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

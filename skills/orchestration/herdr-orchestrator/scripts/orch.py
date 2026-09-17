@@ -1079,7 +1079,12 @@ def cmd_guard(a) -> int:
     contract = task_contract(task)
     if not contract:
         fail(f"task {a.id!r} has no contract: guards are generated from the contract")
-    worktree = Path(a.worktree or task.get("worktree") or state["repo"]["root"]).expanduser().resolve()
+    recorded = a.worktree or task.get("worktree")
+    if not recorded and a.install_hook:
+        fail(f"task {a.id!r} has no worktree recorded: a scope gate installed on the shared "
+             f"checkout would be a false prevention claim. Record it first "
+             f"(`set-task --id {a.id} --worktree <path>`) or pass --worktree explicitly.")
+    worktree = Path(recorded or state["repo"]["root"]).expanduser().resolve()
     kind = a.kind or (task.get("worker_execution") or {}).get("kind") \
         or task.get("preferred_agent_kind") or "auto"
     out = {"task_id": a.id, "kind": kind, "worktree": str(worktree)}

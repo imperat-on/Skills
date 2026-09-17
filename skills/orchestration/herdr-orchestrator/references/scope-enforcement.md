@@ -62,6 +62,40 @@ effective rules do not match the contract, so the orchestrator cannot silently p
 unverified launch. The `install-hook` path additionally writes a `contract.json` snapshot next to the
 hook, so the gate never depends on mutable orchestration state.
 
+### The gate belongs to exactly one worktree (learned the hard way)
+
+A live run with two workers ended with **both sharing one guard**: the install resolved a stale target
+and still reported `installed: true`, so `slug-dashes` was being validated against `stats-empty`'s
+scope (its legitimate commit would have been refused) while its own scope had no gate at all.
+
+Two rules now enforced in code, and both need to stay:
+
+- **`install_hook` writes the worktree config explicitly** (`git config --file <gitdir>/config.worktree
+  core.hooksPath ...`, with `<gitdir>` from `git -C <worktree> rev-parse --git-dir`) and then
+  **verifies** that the worktree itself reports the guard. `--worktree` resolution depends on the
+  process environment (a stale `GIT_DIR` or a different cwd silently targets another worktree);
+  writing the file removes the ambiguity. Verification failure returns `installed: false` — never a
+  claim of prevention.
+- **`orch.py guard --install-hook` refuses when the task has no worktree recorded.** The old fallback
+  was `state["repo"]["root"]`, i.e. the shared checkout: the gate went on the developer's checkout
+  while the worker ran unguarded, and the log said `scope_guard_installed`. Record the worktree first
+  (`set-task --id <task> --worktree <path>`) or pass `--worktree` explicitly.
+
+Order matters: **create the worktree, record it on the task, then install the guard.**
+
+### Generated output is not a scope violation
+
+A live run flagged `__pycache__/` on both workers and the noise hid the real signal, and an
+un-tracked cache directory also made `worktree_clean` false (which would block the merge gate in a
+repository without a `.gitignore`). `ALWAYS_IGNORED` now covers the usual generated paths
+(`__pycache__`, `*.pyc/pyo`, `node_modules`, `.venv`/`venv`, `dist`, `build`, `target`,
+`*.egg-info`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.cache`) and both `dirty_paths` and
+`worktree_clean` filter through it. A run that needs more adds `ignore_scope` to the contract.
+
+Note the path normalisation trap behind that bug: `path_matches` used to `lstrip("./")`, which strips
+*every* leading dot and slash — `.pytest_cache/x` became `pytest_cache/x` and matched nothing. Strip
+one leading `./` at a time instead.
+
 ## Layer B - detection (always)
 
 ```bash

@@ -778,6 +778,19 @@ state files are hints. Details: `references/state-and-recovery.md`.
   boundary whose environment the installed version refuses at startup: the worker never became
   ready. Prove the mechanism against the installed version before dispatch, or record
   `prevention: none` and lean on the commit gate.
+- **Two workers sharing one scope gate.** The install resolves the target from the process
+  environment: a live run ended with both worktrees pointing at one guard (worker B validated against
+  worker A's scope, its own scope unguarded) *and* `installed: true` in the log. Create the worktree,
+  **record it on the task**, then install; the install must write the worktree's own
+  `config.worktree` and **verify that this worktree reports its guard**, refusing otherwise.
+- **A gate on the shared checkout.** `guard --install-hook` with no worktree recorded used to fall
+  back to `state["repo"]["root"]` — the developer's checkout carried the gate while the worker ran
+  unguarded, and the event log said `scope_guard_installed`. It now refuses; record the worktree
+  first or pass `--worktree` explicitly.
+- **Generated output reported as a scope violation.** `__pycache__/` on both workers hid the real
+  signal in a live run, and an untracked cache dir also made `worktree_clean` false (enough to block
+  the merge gate in a repository without `.gitignore`). Generated paths are ignored by
+  `dirty_paths`/`worktree_clean`; add `ignore_scope` to the contract for anything else.
 - **A false `blocked` read as a decision point.** With `screen_detection_skip_reason:
   full_lifecycle_hook_authority`, `agent wait` can report `blocked` while the agent is plainly
   working: `herdr agent explain` settles it, and `wait --until done` is the safer wait.
@@ -872,6 +885,12 @@ The skill is working when this scenario completes with real evidence:
 34. The report carries the run metrics (tokens, cache share, model per task, dispatches per accepted
     task, review-fail rate, cost per accepted change), and the retro produced proposals rather than
     silent skill edits.
+35. Each worker's worktree reports **its own** guard (`git -C <worktree> config --get core.hooksPath`
+    equals that task's guard dir, and no two tasks share one), and the shared checkout carries none.
+36. A `guard --install-hook` attempted before the worktree was recorded was **refused**, not silently
+    installed on the shared checkout.
+37. Generated artifacts (`__pycache__/`, `node_modules/`, build output) neither produce scope
+    violations nor make a worktree read as dirty, and a real authored file still does both.
 
 12. **Retro and metrics** — collect the run metrics block (`references/budget-and-routing.md`):
     tokens in/out, cache-hit share, model per task, wall time, dispatches per accepted task,
