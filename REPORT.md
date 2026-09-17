@@ -273,9 +273,11 @@ limpo logo após o guard). Mecanismo único: o arquivo de projeto.
 **Alvo de run declarado (2026-09-17):** `opencode`, `claude` e `hermes`. Os outros kinds saem do
 `guard --plan` como `prevention: "unsupported"` — com detecção e commit gate ainda valendo, mas sem
 claim de fronteira. Para o `hermes` a fronteira e' um hook `pre_tool_call` do kit
-(`hooks/scripts/scope-guard.py`) que le o contrato dentro do worktree; exercitado ao vivo: fora do
-escopo -> `exit 2` / `{"action": "block"}`, dentro -> passa, sem contrato -> silencioso (sessao
-normal intacta). Instalar o hook e' acao do usuario (o agente nao edita `~/.hermes/config.yaml`).
+(`hooks/scripts/scope-guard.py`) que le o contrato dentro do worktree. Registrado e aprovado no
+`~/.hermes/config.yaml` (7 hooks) apos autorizacao do usuario; provado em quatro frentes: 7/7 casos
+diretos, o round-trip do dispatcher (`{"action": "block"}` fora, passa dentro), o
+`guard --verify-launch --kind hermes` -> `verified: true` com `cases {'outside': 2, 'inside': 0}`, e
+um worker Hermes REAL instruido a escrever fora do escopo: bloqueado, arquivo nunca criado.
 
 Recuperação: `kill -9` no worker → watchdog classifica `agent_gone` → `resume`
 reconstrói branch/worktree/commits/critérios → `replace-worker` entrega o pacote

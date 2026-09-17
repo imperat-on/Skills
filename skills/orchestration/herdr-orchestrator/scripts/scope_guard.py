@@ -491,14 +491,14 @@ KIND_ADAPTERS = {
         "write_boundary": "sub-path",
         "probe_kind": "hook",
         "hook_path_hint": "hooks/scripts/scope-guard.py",
-        "verified_on": "hook exercised live on this host: 7/7 direct cases (write/patch inside the "
-                       "scope pass; write/patch outside and `echo >> outside` blocked with exit 2; no "
-                       "contract file -> exit 0 so normal sessions are untouched) and the full "
-                       "dispatcher round-trip via `hermes hooks test pre_tool_call --for-tool "
-                       "write_file --payload-file <payload>`: outside -> exit 2 with the Hermes wire "
-                       "shape {\"action\": \"block\", ...}, inside -> exit 0. Installing the hook "
-                       "needs the user: the agent cannot edit ~/.hermes/config.yaml by design "
-                       "(snippet: hooks/configs/hermes.config.snippet.yaml)",
+        "verified_on": "registered and approved on this host (7 hooks configured) and exercised "
+                       "four ways: (a) 7/7 direct cases; (b) the dispatcher round-trip "
+                       "(`hermes hooks test ...`): outside -> exit 2 with the wire shape "
+                       "{\"action\": \"block\"}, inside -> exit 0; (c) `guard --verify-launch "
+                       "--kind hermes` -> verified: true with cases {'outside': 2, 'inside': 0}; "
+                       "(d) A REAL hermes worker told to write outside its scope: the write was "
+                       "blocked and the file was never created. Registering the hook takes the user "
+                       "(the agent cannot edit ~/.hermes/config.yaml by design)",
         "probe": None,
         "env_var": None,
         "launch_args": [],
