@@ -592,6 +592,47 @@ class TestScopeEnforcement(OrchTestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("backend/auth.ts", r.stdout)
 
+    def test_hermes_boundary_is_a_hook_over_the_worktree_contract(self):
+        """O hermes nao tem config de permissao: a fronteira e' um hook pre_tool_call que le o
+        contrato dentro do worktree. O plano escreve o contrato; o probe prova o hook em forca
+        (fora -> exit 2, dentro -> exit 0) e diz se ele esta registrado na CLI."""
+        self.init()
+        wt, _branch, _commit = self.prepare_task("a")
+        r = self.orch("guard", "--id", "a", "--plan", "--kind", "hermes")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        plan = json.loads(r.stdout)["prevention_plan"]
+        self.assertEqual(plan["prevention"], "mechanical")
+        contract_file = Path(plan["contract_file"])
+        self.assertTrue(contract_file.is_file())
+        data = json.loads(contract_file.read_text(encoding="utf-8"))
+        self.assertEqual(data["write_scope"], ["src/app/**"])
+        self.assertEqual(data["forbidden_scope"], ["backend/**", "database/**"])
+        self.assertEqual(subprocess.run(["git", "-C", str(wt), "status", "--porcelain"],
+                                        capture_output=True, text=True).stdout.strip(), "")
+
+        v = self.orch("guard", "--id", "a", "--verify-launch", "--kind", "hermes", "--cwd", str(wt))
+        payload = json.loads(v.stdout)["launch_verification"]
+        self.assertEqual(payload["cases"], {"outside": 2, "inside": 0},
+                         f"o hook tem que bloquear fora e passar dentro: {payload}")
+        self.assertFalse(payload["verified"], "sem o hook registrado nao da' para dizer verified")
+        self.assertTrue(any("not registered" in x for x in payload["reasons"]), payload["reasons"])
+
+    def test_unsupported_kinds_are_labelled_not_silently_covered(self):
+        """Decisao do usuario: o alvo de run e' opencode, claude e hermes. O resto nao pode sair
+        como se tivesse fronteira."""
+        self.init()
+        self.prepare_task("a")
+        for kind in ("codex", "prime"):
+            r = self.orch("guard", "--id", "a", "--plan", "--kind", kind)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            plan = json.loads(r.stdout)["prevention_plan"]
+            self.assertEqual(plan["prevention"], "unsupported", plan)
+            self.assertTrue(any("NOT a supported run target" in x for x in plan["limitations"]), plan)
+        for kind in ("opencode", "claude", "hermes"):
+            r = self.orch("guard", "--id", "a", "--plan", "--kind", kind)
+            plan = json.loads(r.stdout)["prevention_plan"]
+            self.assertNotEqual(plan["prevention"], "unsupported", kind)
+
     def test_plan_per_kind_reports_the_honest_boundary(self):
         """Mesmo rigor nos outros CLIs: cada plano diz o nivel REAL de fronteira e os args a passar.
 
@@ -613,15 +654,16 @@ class TestScopeEnforcement(OrchTestCase):
         self.assertEqual(plan["launch_args"][0], "--settings")
         self.assertTrue(any("not exercised in force" in lim for lim in plan["limitations"]))
 
+        # codex e prime sairam do alvo de run (decisao do usuario): o plano tem que dizer isso,
+        # e nao reportar um nivel de fronteira como se fossem suportados
         r = self.orch("guard", "--id", "a", "--plan", "--kind", "codex")
         plan = json.loads(r.stdout)["prevention_plan"]
-        self.assertEqual(plan["prevention"], "coarse")
-        self.assertEqual(plan["launch_args"], ["-s", "workspace-write", "-C", str(wt)])
-        self.assertTrue(any("/tmp" in lim for lim in plan["limitations"]))
+        self.assertEqual(plan["prevention"], "unsupported")
+        self.assertTrue(any("/tmp" in lim for lim in plan["limitations"]), plan["limitations"])
 
         r = self.orch("guard", "--id", "a", "--plan", "--kind", "prime")
         plan = json.loads(r.stdout)["prevention_plan"]
-        self.assertEqual(plan["prevention"], "none")
+        self.assertEqual(plan["prevention"], "unsupported")
         self.assertTrue(any("--autonomous-gate" in lim for lim in plan["limitations"]))
 
     def test_checkpoint_written_inside_the_worktree_is_found(self):

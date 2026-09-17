@@ -91,7 +91,11 @@ one kind at a time against the installed binary:
 | `claude` 2.1.263 | sub-path, **configured not exercised** | `--settings` with `Edit(**)` deny + `Edit(<scope>/**)` allow; the binary parses the file and requires `Edit(path)` rules (`Write(...)` rules are ignored with a warning) | the binary's own warning about rule syntax; the live denial could not be exercised here because the configured provider refuses the connection |
 | `codex` 0.154.0 | **worktree only, and it includes /tmp** | shell commands run under `sandbox: workspace-write [workdir, /tmp, $TMPDIR]` | the line `codex exec` prints at startup. No sub-path denial, and a worktree under /tmp is not confined at all |
 | `prime` (help surface) | none | `-t/--tools` restricts which tools run, never where they write; its mechanical value is `--autonomous-gate <check>` plus `--autonomous-max-tokens/-turns/-timeout` | `prime-agent help` / `help config`: no permission or sandbox flag exists. Exercised live: it wrote a file OUTSIDE the repo on request, and when the autonomous gate was the test file itself it EDITED THE TEST to make the gate pass |
-| `hermes` | n/a (it is the orchestrator) | approvals and hooks are user decisions (`--yolo`, `--accept-hooks`) | `hermes --help` |
+| `hermes` | **sub-path, via hook** | the run-owned `scope-guard.py` pre_tool_call hook reads `<worktree>/.orchestrator-contract.json` and denies writes outside `write_scope` — file tools by path, the shell by redirection/tee/sed -i/cp-mv | exercised live: 7/7 direct cases and the full dispatcher round-trip (`hermes hooks test`), outside -> `{"action": "block"}`, inside -> pass. Registering the hook is a USER action (the agent cannot edit `~/.hermes/config.yaml`) |
+
+**Supported run targets: `opencode`, `claude`, `hermes`.** Anything else (`codex`, `prime`, …) comes
+back as `prevention: "unsupported"` from `guard --plan`; detection and the commit gate still apply, but
+no write boundary is claimed for it.
 
 Three operational consequences:
 

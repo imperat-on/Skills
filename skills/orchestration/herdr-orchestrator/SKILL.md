@@ -909,6 +909,16 @@ The skill is working when this scenario completes with real evidence:
 38. Every claimed prevention mechanism is proven in force against the installed binary version
     (`guard --verify-launch` exits 0 with `verified: true`) and the guard artifact the plan points at
     exists on disk; the same claim names that version, so a version change invalidates it.
+46. **The supported run targets are `opencode`, `claude` and `hermes` — nothing else.** Decided by
+    the user, and the plans enforce it: `guard --plan` for any other kind comes back
+    `prevention: "unsupported"` with the reason, so a run cannot quietly claim a boundary it does
+    not have. Each supported kind has its own mechanism and its own level, and the level is what you
+    report: `opencode` proves it at launch (`guard --verify-launch`, exit 0 or the run stops being
+    trusted), `claude` writes a `--settings` file the binary parses (level `configured` until a live
+    denial is exercised), `hermes` is armed by `<worktree>/.orchestrator-contract.json` + the
+    `scope-guard.py` hook (probe runs the hook both ways and also reports whether the hook is
+    registered and approved in the CLI config — installing it is a user action, the agent cannot
+    edit `~/.hermes/config.yaml`).
 45. **A gate the worker can edit is not a gate.** Live proof: prime-agent's `--autonomous-gate`
     was `python3 -m unittest tests.test_app -v` with the assertion expecting the *unfixed* value;
     instead of fixing the code the worker edited the TEST (`assertEqual(x, 2)` -> `assertEqual(x,

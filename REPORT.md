@@ -270,6 +270,13 @@ checkpoints liberado na config com padrão `**` (o worker escreve o checkpoint f
 worktree — provado ao vivo), e `.opencode/` no `info/exclude` do worktree (o status fica
 limpo logo após o guard). Mecanismo único: o arquivo de projeto.
 
+**Alvo de run declarado (2026-09-17):** `opencode`, `claude` e `hermes`. Os outros kinds saem do
+`guard --plan` como `prevention: "unsupported"` — com detecção e commit gate ainda valendo, mas sem
+claim de fronteira. Para o `hermes` a fronteira e' um hook `pre_tool_call` do kit
+(`hooks/scripts/scope-guard.py`) que le o contrato dentro do worktree; exercitado ao vivo: fora do
+escopo -> `exit 2` / `{"action": "block"}`, dentro -> passa, sem contrato -> silencioso (sessao
+normal intacta). Instalar o hook e' acao do usuario (o agente nao edita `~/.hermes/config.yaml`).
+
 Recuperação: `kill -9` no worker → watchdog classifica `agent_gone` → `resume`
 reconstrói branch/worktree/commits/critérios → `replace-worker` entrega o pacote
 (contrato + estado + checkpoint) → substituto termina e **commita** → gate valida.

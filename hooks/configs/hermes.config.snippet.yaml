@@ -12,6 +12,11 @@ hooks:
       command: "__HOOKS__/guard-secrets.py"
       timeout: 10
       fail_closed: true
+    # fronteira de escrita do worker: só age quando existe um contrato de tarefa no cwd
+    - matcher: "write_file|patch|terminal"
+      command: "__HOOKS__/scope-guard.py"
+      timeout: 10
+      fail_closed: true
   post_tool_call:
     - matcher: "write_file|patch"
       command: "__HOOKS__/auto-format.sh"

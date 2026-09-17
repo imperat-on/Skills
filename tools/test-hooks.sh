@@ -102,6 +102,19 @@ else
   fail=$((fail+1)); printf '  FAIL %-46s token ficou no log\n' "redacao"
 fi
 
+echo "== scope-guard (fronteira do worker: so o escopo do contrato)"
+SG_WT="$(mktemp -d)"; mkdir -p "$SG_WT/src"
+printf 'x = 1\n' > "$SG_WT/src/app.py"
+printf '{"task_id":"t1","repo_root":"%s","worktree":"%s","write_scope":["src/app.py"],"forbidden_scope":["tests/**"],"base_commit":"abc1234"}\n' "$SG_WT" "$SG_WT" > "$SG_WT/.orchestrator-contract.json"
+check "write DENTRO do escopo"         0 scope-guard.py "$(printf '{"tool_name":"write_file","cwd":"%s","tool_input":{"file_path":"%s/src/app.py","content":"y"}}' "$SG_WT" "$SG_WT")"
+check "write FORA do escopo"           2 scope-guard.py "$(printf '{"tool_name":"write_file","cwd":"%s","tool_input":{"file_path":"%s/fora.py","content":"x"}}' "$SG_WT" "$SG_WT")"
+check "patch FORA do escopo"           2 scope-guard.py "$(printf '{"tool_name":"patch","cwd":"%s","tool_input":{"path":"%s/fora.py","old_string":"a","new_string":"b"}}' "$SG_WT" "$SG_WT")"
+check "shell: echo >> FORA"            2 scope-guard.py "$(printf '{"tool_name":"terminal","cwd":"%s","tool_input":{"command":"echo invadido >> %s/fora.py"}}' "$SG_WT" "$SG_WT")"
+check "shell: git status (nao escreve)" 0 scope-guard.py "$(printf '{"tool_name":"terminal","cwd":"%s","tool_input":{"command":"git status --short"}}' "$SG_WT")"
+rm -f "$SG_WT/.orchestrator-contract.json"
+check "sem contrato (sessao normal)"   0 scope-guard.py "$(printf '{"tool_name":"write_file","cwd":"%s","tool_input":{"file_path":"%s/fora.py","content":"x"}}' "$SG_WT" "$SG_WT")"
+rm -rf "$SG_WT"
+
 echo "== notify-stop (nunca bloqueia)"
 check "stop"                     0 notify-stop.sh '{"hook_event_name":"Stop","cwd":"/tmp","last_assistant_message":"feito"}'
 

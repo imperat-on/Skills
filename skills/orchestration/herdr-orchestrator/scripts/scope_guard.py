@@ -482,7 +482,31 @@ def uninstall_hook(worktree) -> dict:
 # --------------------------------------------------------------------------- Layer A: kind plans
 
 KIND_ADAPTERS = {
+    "hermes": {
+        "supported": True,
+        "mechanism": "pre_tool_call hooks: the run-owned `scope-guard.py` hook reads "
+                     "`<worktree>/.orchestrator-contract.json` and denies file writes outside "
+                     "write_scope — file tools by `file_path`, the shell by redirections/tee/sed -i/"
+                     "cp-mv destination — with guard-dangerous and guard-secrets in the same chain",
+        "write_boundary": "sub-path",
+        "probe_kind": "hook",
+        "hook_path_hint": "hooks/scripts/scope-guard.py",
+        "verified_on": "hook exercised live on this host: 7/7 direct cases (write/patch inside the "
+                       "scope pass; write/patch outside and `echo >> outside` blocked with exit 2; no "
+                       "contract file -> exit 0 so normal sessions are untouched) and the full "
+                       "dispatcher round-trip via `hermes hooks test pre_tool_call --for-tool "
+                       "write_file --payload-file <payload>`: outside -> exit 2 with the Hermes wire "
+                       "shape {\"action\": \"block\", ...}, inside -> exit 0. Installing the hook "
+                       "needs the user: the agent cannot edit ~/.hermes/config.yaml by design "
+                       "(snippet: hooks/configs/hermes.config.snippet.yaml)",
+        "probe": None,
+        "env_var": None,
+        "launch_args": [],
+        "notes": "the contract file inside the worktree is what arms the hook; a run that forgets "
+                 "`guard --plan --kind hermes` has detection only (commit gate + scope check)",
+    },
     "opencode": {
+        "supported": True,
         "mechanism": "the run-owned PROJECT config <worktree>/.opencode/opencode.json (edit "
                      "deny-by-default + allow-list, bash deny-by-default, external_directory deny "
                      "with the checkpoint directory allowed), read by opencode from the worker's cwd",
@@ -516,10 +540,12 @@ KIND_ADAPTERS = {
                        "path-scoped rule in `help`/`help config`",
         "probe": None,
         "env_var": None,
-        "notes": "use the gate as the run's required check and the token/turn limits as the budget, "
-                 "but point the gate at something the worker CANNOT write: exercised live, it edited "
-                 "the very test the gate ran to make it pass. Keep the commit gate and detection in "
-                 "force because the write boundary is absent",
+        "supported": False,
+        "notes": "NOT SUPPORTED by the orchestrator (target set: opencode, claude, hermes). Kept for "
+                 "reference: its `--autonomous-gate` + `--autonomous-max-tokens/-turns` are "
+                 "mechanical, but point the gate at something the worker CANNOT write — exercised "
+                 "live, it edited the very test the gate ran to make it pass — and keep the commit "
+                 "gate and detection in force because the write boundary is absent",
     },
     "codex": {
         "mechanism": "sandbox workspace-write: model shell commands run sandboxed with writable "
@@ -535,10 +561,13 @@ KIND_ADAPTERS = {
         "probe": None,
         "env_var": None,
         "launch_args": ["-s", "workspace-write", "-C", "{worktree}"],
-        "notes": "put run worktrees OUTSIDE /tmp when you rely on this; expect no sub-path denial, "
-                 "so keep the commit gate and the post-hoc scope check in force",
+        "supported": False,
+        "notes": "NOT SUPPORTED by the orchestrator (the run target set is opencode, claude and "
+                 "hermes). Kept for reference: put worktrees OUTSIDE /tmp if you ever rely on it, "
+                 "and expect no sub-path denial — keep the commit gate and detection in force",
     },
     "claude": {
+        "supported": True,
         "mechanism": "--settings with permissions.deny/allow using **Edit(path) rules** (Edit covers "
                      "every file-editing tool; `Write(...)` rules are ignored with a warning)",
         "write_boundary": "sub-path",
@@ -559,6 +588,59 @@ KIND_ADAPTERS = {
 }
 
 
+def exclude_in_worktree(wt, *patterns: str) -> bool:
+    """Add run-owned paths to the worktree's exclude (never the shared config): the guard's
+    artifacts must not make the worktree read as dirty for the merge gate."""
+    try:
+        ex = subprocess.run(["git", "rev-parse", "--git-path", "info/exclude"], cwd=str(wt),
+                            capture_output=True, text=True, timeout=30)
+        if ex.returncode != 0:
+            return False
+        path = Path(ex.stdout.strip())
+        if not path.is_absolute():
+            path = Path(str(wt)) / path
+        body = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
+        missing = [p for p in patterns if p not in body]
+        if not missing:
+            return True
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write("\n# run-owned: worker write boundary (.orchestrator guards)\n")
+            for p in missing:
+                fh.write(p + "\n")
+        return True
+    except OSError:
+        return False
+
+
+def write_worktree_contract(contract: dict, worktree=None) -> str | None:
+    """The contract file that arms the hermes hook, written INSIDE the worktree.
+
+    `scope-guard.py` looks for `.orchestrator-contract.json` walking up from its cwd, so the worker
+    only has a boundary while this file is next to it — and the worktree excludes it so it never
+    reads as the worker's own output.
+    """
+    wt = worktree or contract.get("worktree")
+    if not wt or not Path(str(wt)).is_dir():
+        return None
+    payload = {
+        "task_id": contract.get("task_id"),
+        "repo_root": orchestrator_dir(wt) or "",
+        "worktree": str(wt),
+        "write_scope": scope_patterns(contract, "write_scope"),
+        "forbidden_scope": scope_patterns(contract, "forbidden_scope"),
+        "base_commit": contract.get("base_commit"),
+        "generated_by": "herdr-orchestrator guard --plan --kind hermes",
+    }
+    try:
+        path = Path(str(wt)) / ".orchestrator-contract.json"
+        path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        exclude_in_worktree(wt, ".orchestrator-contract.json", ".checkpoint.json", ".opencode/")
+        return str(path)
+    except OSError:
+        return None
+
+
 def write_project_permission(contract: dict, permission: dict) -> str | None:
     """Write the run-owned `.opencode/opencode.json` inside the worktree, excluded from git status.
 
@@ -573,18 +655,7 @@ def write_project_permission(contract: dict, permission: dict) -> str | None:
     try:
         proj.parent.mkdir(parents=True, exist_ok=True)
         proj.write_text(json.dumps({"permission": permission}, indent=2) + "\n", encoding="utf-8")
-        ex = subprocess.run(["git", "rev-parse", "--git-path", "info/exclude"], cwd=str(wt),
-                            capture_output=True, text=True, timeout=30)
-        if ex.returncode == 0:
-            path = Path(ex.stdout.strip())
-            if not path.is_absolute():
-                path = Path(str(wt)) / path
-            body = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
-            if ".opencode/" not in body:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                with path.open("a", encoding="utf-8") as fh:
-                    fh.write("\n# run-owned: worker write boundary (.orchestrator guards)\n"
-                             ".opencode/\n.checkpoint.json\n")
+        exclude_in_worktree(wt, ".opencode/", ".checkpoint.json")
         return str(proj)
     except OSError:
         return None
@@ -740,6 +811,20 @@ def plan_prevention(contract: dict, kind: str, *, out_dir, worktree=None) -> dic
 
     plan["mechanism"] = adapter["mechanism"]
     plan["verified_on"] = adapter["verified_on"]
+    if adapter.get("supported") is False:
+        plan.update({
+            "prevention": "unsupported",
+            "limitations": [
+                f"kind {kind!r} is NOT a supported run target: the orchestrator covers opencode, "
+                f"claude and hermes. Detection (validate-scope) and the commit gate still work, but "
+                f"no write boundary is claimed.",
+                str(adapter.get("notes") or ""),
+            ],
+        })
+        plan_file = out_dir / "prevention-plan.json"
+        plan_file.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+        plan["artifacts"].append(str(plan_file))
+        return plan
     if adapter.get("env_status") == "rejected":
         plan.update({
             "prevention": "none",
@@ -758,7 +843,32 @@ def plan_prevention(contract: dict, kind: str, *, out_dir, worktree=None) -> dic
         plan_file.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
         plan["artifacts"].append(str(plan_file))
         return plan
-    if adapter["write_boundary"] == "sub-path" and adapter.get("probe"):
+    if adapter.get("probe_kind") == "hook":
+        contract_file = write_worktree_contract(contract, worktree=worktree)
+        plan.update({
+            "prevention": "mechanical" if contract_file else "none",
+            "contract_file": contract_file,
+            "artifacts": plan["artifacts"] + ([contract_file] if contract_file else []),
+            "verification": {
+                "exists": True,
+                "probe": "hook: scope-guard.py run against a payload outside the scope "
+                         "(and `hermes hooks test pre_tool_call --for-tool write_file`)",
+                "expect": {"outside_scope": "exit 2 / action: block", "inside_scope": "exit 0"},
+            },
+            "limitations": [
+                "the hook must be registered and approved in the worker's own CLI config "
+                "(~/.hermes/config.yaml + consent allowlist): the orchestrator cannot edit that file "
+                "by design — see hooks/configs/hermes.config.snippet.yaml",
+                "the contract file inside the worktree is what arms the hook; deleting it disarms "
+                "the boundary (detection still catches the result)",
+                "a compound shell command that writes through a path the parser does not recognise "
+                "is a residual hole, caught by validate-scope and the commit gate",
+            ] if contract_file else [
+                "no worktree recorded: the contract file that arms the hook could not be written, "
+                "so this worker has detection only",
+            ],
+        })
+    elif adapter["write_boundary"] == "sub-path" and adapter.get("probe"):
         orch = orchestrator_dir(out_dir)
         # The worker writes its checkpoint into a directory that must already exist: creating it is
         # the orchestrator's job (a missing parent makes the worker's write fail or turn into a
@@ -854,6 +964,69 @@ def plan_prevention(contract: dict, kind: str, *, out_dir, worktree=None) -> dic
     return plan
 
 
+def verify_hook_probe(contract: dict, adapter: dict, result: dict, worktree, cwd) -> dict:
+    """Prove a hook-based boundary in force: the hook is registered, and it actually blocks.
+
+    Two cases are run against the real hook binary: a path outside write_scope must exit 2 and a
+    path inside must exit 0. Both need the contract file the orchestrator wrote in the worktree —
+    without it the hook stays silent on purpose.
+    """
+    # the kit root is whichever ancestor actually holds the hook (never a hardcoded depth)
+    hint = str(adapter.get("hook_path_hint") or "hooks/scripts/scope-guard.py")
+    here = Path(__file__).resolve()
+    kit = next((base for base in [here, *here.parents] if (base / hint).is_file()), None)
+    hook = (kit / hint) if kit else (here.parent / hint)
+    wt = worktree or contract.get("worktree")
+    result["hook"] = str(hook) if hook.is_file() else None
+    if not hook.is_file():
+        result["reasons"].append(f"hook script not found in the kit: {hook}")
+        return result
+    if not wt:
+        result["reasons"].append("no worktree recorded: nothing to arm the hook against")
+        return result
+    if not (Path(str(wt)) / ".orchestrator-contract.json").is_file():
+        result["reasons"].append("the worktree has no .orchestrator-contract.json: run "
+                                 "`guard --plan --kind hermes` first (the hook is silent without it)")
+        return result
+    try:
+        proc = subprocess.run(["hermes", "hooks", "list"], capture_output=True, text=True, timeout=60)
+        registered = proc.returncode == 0 and "scope-guard.py" in proc.stdout
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        registered = False
+        result["reasons"].append(f"could not read the hook registry: {exc}")
+    result["registered"] = registered
+    if not registered:
+        result["reasons"].append(
+            "the hook is not registered in the worker's CLI config (the agent cannot edit "
+            "~/.hermes/config.yaml by design): merge hooks/configs/hermes.config.snippet.yaml, "
+            "approve it at session start, and re-run")
+    pats = scope_patterns(contract, "write_scope")
+    inside_rel = None
+    if pats:
+        p = str(pats[0]).strip().rstrip("/")
+        inside_rel = p.replace("**", "probe-escopo.txt").replace("*", "probe-escopo.txt") if any(
+            ch in p for ch in "*?[") else p
+    cases = [("outside", "fora-do-escopo.txt", 2)]
+    if inside_rel:
+        cases.append(("inside", inside_rel, 0))
+    result["cases"] = {}
+    import os as _os
+    for label, rel, expected in cases:
+        payload = {"tool_name": "write_file", "cwd": str(wt),
+                   "tool_input": {"file_path": str(Path(str(wt)) / rel), "content": "probe"}}
+        try:
+            run = subprocess.run(["python3", str(hook)], input=json.dumps(payload),
+                                 capture_output=True, text=True, timeout=60, cwd=str(wt))
+            rc = run.returncode
+        except (OSError, subprocess.TimeoutExpired):
+            rc = None
+        result["cases"][label] = rc
+        if rc != expected:
+            result["reasons"].append(f"hook case {label!r} ({rel}) exited {rc}, expected {expected}")
+    result["verified"] = not result["reasons"]
+    return result
+
+
 def verify_launch(contract: dict, kind: str, *, cwd=None, observed: str | None = None,
                   worktree=None) -> dict:
     """Prove the prevention is actually in force before the worker is trusted.
@@ -868,6 +1041,13 @@ def verify_launch(contract: dict, kind: str, *, cwd=None, observed: str | None =
     result = {"kind": kind, "task_id": contract.get("task_id"), "verified": False,
               "mechanism": adapter["mechanism"] if adapter else None, "reasons": [],
               "observed": None, "verified_at": now()}
+    if adapter is not None and adapter.get("probe_kind") == "hook":
+        return verify_hook_probe(contract, adapter, result, worktree, cwd)
+    if adapter is not None and adapter.get("supported") is False:
+        result["reasons"].append(
+            f"{kind} is not a supported run target (opencode, claude and hermes are): "
+            f"no write boundary is claimed for it. {str(adapter.get('notes'))[:160]}")
+        return result
     if adapter is None or not (adapter.get("probe") or adapter.get("env_var")):
         if adapter:
             result["reasons"].append(
