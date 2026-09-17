@@ -29,6 +29,19 @@ Um arquivo funciona nas quatro CLIs — sem plugin, sem SDK, sem jq.
 Codex merece o aviso: ele guarda o hash da definição do hook e **não roda** até
 você revisar em `/hooks`. Depois de qualquer edição nos scripts, revise de novo.
 
+## Sempre ativo (ponytail + caveman)
+
+`install-always-on.sh` não é hook de evento: escreve um bloco com marcador no
+arquivo de instrução **permanente** de cada CLI (o que ela lê em toda sessão), para
+o agente já começar em modo lazy senior e caveman. Idempotente, com backup,
+`--dry-run` e `--remove`. Texto em [`always-on.md`](always-on.md).
+
+```bash
+./install-always-on.sh                 # todas as CLIs detectadas
+./install-always-on.sh --only hermes   # uma só
+./install-always-on.sh --remove        # desfazer
+```
+
 ## Os seis scripts
 
 | Arquivo | Evento | Bloqueia? | O que faz |

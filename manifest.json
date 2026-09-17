@@ -1,7 +1,7 @@
 {
  "generated_from": "clones --depth 1 dos repos de origem em 2026-09-16",
  "spec": "https://agentskills.io/specification",
- "count": 140,
+ "count": 146,
  "skills": [
   {
    "name": "code-review-excellence",
@@ -485,6 +485,19 @@
    "files": 2
   },
   {
+   "name": "ponytail",
+   "category": "efficiency",
+   "tier": "core",
+   "license": "MIT",
+   "author": "Dietrich Gebert (DietrichGebert)",
+   "source": "https://github.com/DietrichGebert/ponytail",
+   "upstream_path": "ponytail/skills/ponytail/SKILL.md",
+   "upstream_sha256": "1316a2f3f95741d2",
+   "bundled_sha256": "1316a2f3f95741d2",
+   "lines": 121,
+   "files": 1
+  },
+  {
    "name": "antigravity-protocol",
    "category": "efficiency",
    "tier": "extra",
@@ -600,6 +613,71 @@
    "bundled_sha256": "e52127b015835630",
    "lines": 20,
    "files": 2
+  },
+  {
+   "name": "ponytail-audit",
+   "category": "efficiency",
+   "tier": "extra",
+   "license": "MIT",
+   "author": "Dietrich Gebert (DietrichGebert)",
+   "source": "https://github.com/DietrichGebert/ponytail",
+   "upstream_path": "ponytail/skills/ponytail-audit/SKILL.md",
+   "upstream_sha256": "5560b8e383dbe2dd",
+   "bundled_sha256": "512464355bbe452b",
+   "lines": 43,
+   "files": 1
+  },
+  {
+   "name": "ponytail-debt",
+   "category": "efficiency",
+   "tier": "extra",
+   "license": "MIT",
+   "author": "Dietrich Gebert (DietrichGebert)",
+   "source": "https://github.com/DietrichGebert/ponytail",
+   "upstream_path": "ponytail/skills/ponytail-debt/SKILL.md",
+   "upstream_sha256": "c84fba75f0ca12bf",
+   "bundled_sha256": "cd942d07e4fe40aa",
+   "lines": 46,
+   "files": 1
+  },
+  {
+   "name": "ponytail-gain",
+   "category": "efficiency",
+   "tier": "extra",
+   "license": "MIT",
+   "author": "Dietrich Gebert (DietrichGebert)",
+   "source": "https://github.com/DietrichGebert/ponytail",
+   "upstream_path": "ponytail/skills/ponytail-gain/SKILL.md",
+   "upstream_sha256": "24e01d1c9715cb13",
+   "bundled_sha256": "fddfde8d0e82e759",
+   "lines": 52,
+   "files": 1
+  },
+  {
+   "name": "ponytail-help",
+   "category": "efficiency",
+   "tier": "extra",
+   "license": "MIT",
+   "author": "Dietrich Gebert (DietrichGebert)",
+   "source": "https://github.com/DietrichGebert/ponytail",
+   "upstream_path": "ponytail/skills/ponytail-help/SKILL.md",
+   "upstream_sha256": "2264d1615117b02b",
+   "bundled_sha256": "e05db028bc7778ba",
+   "lines": 73,
+   "files": 1
+  },
+  {
+   "name": "ponytail-review",
+   "category": "efficiency",
+   "tier": "extra",
+   "license": "MIT",
+   "author": "Dietrich Gebert (DietrichGebert)",
+   "source": "https://github.com/DietrichGebert/ponytail",
+   "upstream_path": "ponytail/skills/ponytail-review/SKILL.md",
+   "upstream_sha256": "40df33b58fc6ef88",
+   "bundled_sha256": "99de02f945b03b4c",
+   "lines": 59,
+   "files": 1
   },
   {
    "name": "ultimate-protocol-simulator",

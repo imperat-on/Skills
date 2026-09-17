@@ -9,13 +9,14 @@ Números medidos nesta máquina com a API do GitHub autenticada e clones `--dept
 | `~/.hermes/skills` (skills pessoais do autor) | — | MIT | 15 | — |
 | [obra/superpowers](https://github.com/obra/superpowers) | 287594 | MIT | 13 | 2026-09-14 |
 | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | 106123 | MIT | 9 | 2026-09-16 |
+| [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) | 140725 | MIT | 6 | 2026-09-14 |
 | [anthropics/skills](https://github.com/anthropics/skills) | 176699 | Apache-2.0 | 6 | 2026-09-10 |
 | [bmad-code-org/BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) | 53104 | MIT | 6 | 2026-09-16 |
 | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | 31248 | MIT | 5 | 2026-08-28 |
 | [KINGSTAR-OMEGA/claude-token-optimizer](https://github.com/KINGSTAR-OMEGA/claude-token-optimizer) | 121 | MIT | 2 | 2026-04-12 |
 | [max-sixty/worktrunk](https://github.com/max-sixty/worktrunk) | 7910 | MIT OR Apache-2.0 | 1 | 2026-09-16 |
 
-Total: **140 skills**, 30539 linhas de `SKILL.md`.
+Total: **146 skills**, 30933 linhas de `SKILL.md`.
 
 ## Crédito por skill
 
@@ -58,6 +59,7 @@ Total: **140 skills**, 30539 linhas de `SKILL.md`.
 | `simplify-code` | coding | extra | skills pessoais do autor | MIT | 271 |
 | `sql-optimization-patterns` | coding | extra | [wshobson/agents](https://github.com/wshobson/agents) | MIT | 215 |
 | `caveman` | efficiency | core | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 91 |
+| `ponytail` | efficiency | core | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) | MIT | 121 |
 | `antigravity-protocol` | efficiency | extra | [KINGSTAR-OMEGA/claude-token-optimizer](https://github.com/KINGSTAR-OMEGA/claude-token-optimizer) | MIT | 59 |
 | `cavecrew` | efficiency | extra | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 79 |
 | `caveman-commit` | efficiency | extra | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 65 |
@@ -67,6 +69,11 @@ Total: **140 skills**, 30539 linhas de `SKILL.md`.
 | `caveman-review` | efficiency | extra | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 54 |
 | `investigate-first` | efficiency | extra | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 18 |
 | `lean-build` | efficiency | extra | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 20 |
+| `ponytail-audit` | efficiency | extra | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) | MIT | 43 |
+| `ponytail-debt` | efficiency | extra | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) | MIT | 46 |
+| `ponytail-gain` | efficiency | extra | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) | MIT | 52 |
+| `ponytail-help` | efficiency | extra | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) | MIT | 73 |
+| `ponytail-review` | efficiency | extra | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) | MIT | 59 |
 | `ultimate-protocol-simulator` | efficiency | extra | [KINGSTAR-OMEGA/claude-token-optimizer](https://github.com/KINGSTAR-OMEGA/claude-token-optimizer) | MIT | 42 |
 | `accessibility` | frontend | core | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 148 |
 | `e2e-testing` | frontend | core | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 328 |

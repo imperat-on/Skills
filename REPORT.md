@@ -28,7 +28,7 @@ Depois da pesquisa, cada candidata passou por **três filtros de curadoria**:
 1. **Existe e é verificável** — `gh api`, clone, caminho de arquivo conferido.
 2. **Licença permite redistribuir** — MIT ou Apache-2.0; sem licença, fora.
 3. **Cabe no orçamento de contexto** — o Codex corta descrições quando há muitas
-   skills (limite de ~2% da janela), então o kit tem tier `core` (34) e `extra` (106).
+   skills (limite de ~2% da janela), então o kit tem tier `core` (35) e `extra` (111).
 
 ## 2. O que eu validei pessoalmente (não veio de relato de terceiro)
 
@@ -50,6 +50,7 @@ Estrelas medidas via `gh api repos/<repo>` em 2026-09-16:
 | max-sixty/worktrunk | 7.910 | 2026-09-16 | MIT OR Apache-2.0 |
 | JuliusBrussee/caveman | **106.123** | 2026-09-16 | MIT só em `skills/` (engine e proxy são BSL-1.1) |
 | KINGSTAR-OMEGA/claude-token-optimizer | 121 | 2026-04-12 | MIT |
+| DietrichGebert/ponytail | **140.725** | 2026-09-14 | MIT |
 | charmbracelet/crush | 28.132 | 2026-09-16 | — |
 | disler/claude-code-hooks-mastery | 3.921 | 2026-03-04 | — |
 
@@ -61,7 +62,7 @@ em zh-CN/ja-JP/ko/tr/es do mesmo conteúdo).
 Infraestrutura testada nesta máquina (depois da segunda passada de curadoria):
 
 ```
-python3 tools/validate-skills.py   ->  140 skills, 0 erros, 0 avisos
+python3 tools/validate-skills.py   ->  146 skills, 0 erros, 0 avisos
 bash tools/test-hooks.sh           ->  PASS: 52   FAIL: 0
 python3 tools/gen-mcp-configs.py   ->  13 MCPs, 5 formatos gerados
 ```
@@ -119,6 +120,8 @@ usuários"). Busca dedicada, e o resultado foi mais estreito do que o barulho su
 | Achado | Estrelas | O que é | Decisão |
 |---|---|---|---|
 | `JuliusBrussee/caveman` | 106.123 | Skill (+ proxy próprio). Comprime a **saída** do agente e o **contexto** (CLAUDE.md, todos) e obriga edição em pedaço | **Entrou**: 9 skills, `skills/efficiency/`. MIT conferido no `LICENSING.md` do repo — a parte paga (engine/proxy/rewriter) é BSL-1.1 e ficou fora |
+| `DietrichGebert/ponytail` | **140.725** | A skill "lazy senior" original: o melhor código é o que não se escreve; YAGNI; stdlib antes de dependência; menor diff | **Entrou** (6 skills, `ponytail` no core). Já havia uma cópia sua em `~/.hermes/skills/openclaw-imports/` — conferi `diff`: **idêntica** ao upstream |
+| `aureliusnexus23/lazy-senior-skill` | 1 | Junta caveman + ponytail em uma skill | Fora: 1 estrela, sem validação de usuário. O efeito é obtido aqui combinando as duas originais no bloco `--always-on` |
 | `KINGSTAR-OMEGA/claude-token-optimizer` | 121 | `antigravity` + `ultimate-protocol`: edição por trecho, proíbe preâmbulo, proíbe despejo de log no chat | **Entrou** (2 skills, tier extra). Menos tração, mas MIT e o conteúdo é disciplina de prompt, não depende de nada |
 | `rtk-ai/rtk` | 80.769 | **Ferramenta**, Apache-2.0: proxy em Rust que comprime a saída de comandos dev (60-90%) | Não é skill. Anotado como ferramenta recomendada |
 | `mksglu/context-mode` | 23.291 | **Ferramenta**: isola saída de ferramenta (98% de redução) e persiste memória de sessão | Não é skill. As 11 "skills" do repo são manuais do próprio produto |

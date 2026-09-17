@@ -48,6 +48,8 @@ SOURCES = {
     "token-optimizer": dict(url="https://github.com/KINGSTAR-OMEGA/claude-token-optimizer", stars=121,
                             push="2026-04-12", license="MIT", author="KINGSTAR-OMEGA",
                             path="claude-token-optimizer"),
+    "ponytail": dict(url="https://github.com/DietrichGebert/ponytail", stars=140725, push="2026-09-14",
+                     license="MIT", author="Dietrich Gebert (DietrichGebert)", path="ponytail/skills"),
 }
 
 # (categoria, tier, origem, nome da skill no clone)
@@ -63,6 +65,14 @@ PLAN = [
     ("efficiency", "extra", "caveman", "investigate-first"),
     ("efficiency", "extra", "token-optimizer", "antigravity2.0"),
     ("efficiency", "extra", "token-optimizer", "ultimate-protocol"),
+    # lazy senior (o "melhor codigo e o que nao se escreve"): sempre ativo via
+    # hooks/install-always-on.sh, por isso a skill principal entra no tier core.
+    ("efficiency", "core", "ponytail", "ponytail"),
+    ("efficiency", "extra", "ponytail", "ponytail-review"),
+    ("efficiency", "extra", "ponytail", "ponytail-audit"),
+    ("efficiency", "extra", "ponytail", "ponytail-debt"),
+    ("efficiency", "extra", "ponytail", "ponytail-gain"),
+    ("efficiency", "extra", "ponytail", "ponytail-help"),
 ]
 
 CAT_TITLE = {"coding": "Codificação", "thinking": "Pensamento e planejamento",

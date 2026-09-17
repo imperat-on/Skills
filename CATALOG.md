@@ -1,6 +1,6 @@
 # Catálogo de skills
 
-140 skills, todas verificadas contra a spec Agent Skills (`python3 tools/validate-skills.py`).
+146 skills, todas verificadas contra a spec Agent Skills (`python3 tools/validate-skills.py`).
 
 **core** = instalada por padrão (`install.sh`). **extra** = só com `--tier all` (mantém a lista inicial curta: o Codex corta descrições quando há muitas skills).
 
@@ -158,11 +158,12 @@
 | `ralphinho-rfc-pipeline` | extra | 69 | affaan-m/ECC | MIT | RFC-driven multi-agent DAG execution pattern with quality gates, merge queues, and work unit orchestration. Use when running RFC-driven multi-agent ex |
 | `worktrunk` | extra | 167 | max-sixty/worktrunk | MIT OR Apache-2.0 | Guidance for Worktrunk (the `wt` CLI) — git worktree management, hooks, and config. Load when working out which worktree a `wt` command will act on, o |
 
-## Economia de token — 11 skills
+## Economia de token — 17 skills
 
 | skill | tier | linhas | origem | licença | o que faz |
 |---|---|---|---|---|---|
 | `caveman` | core | 91 | JuliusBrussee/caveman | MIT | Ultra-compressed communication mode that cuts output tokens while keeping technical accuracy. Levels: lite, full, ultra and the wenyan variants. Use f |
+| `ponytail` | core | 121 | DietrichGebert/ponytail | MIT | Forces the laziest solution that actually works, simplest, shortest, most minimal. Channels a senior dev who has seen everything: question whether the |
 | `antigravity-protocol` | extra | 59 | KINGSTAR-OMEGA/claude-token-optimizer | MIT | Use this skill ALWAYS whenever the user asks you to write code, modify files, fix bugs, plan features, or do any software development task. Trigger th |
 | `cavecrew` | extra | 79 | JuliusBrussee/caveman | MIT | When to delegate to `cavecrew-investigator` (locate code), `cavecrew-builder` (1-2 file edit) or `cavecrew-reviewer` (diff review) instead of working  |
 | `caveman-commit` | extra | 65 | JuliusBrussee/caveman | MIT | Write a Conventional Commits message compressed to intent only. Use for "write a commit", "commit message", /commit or /caveman-commit. |
@@ -172,6 +173,11 @@
 | `caveman-review` | extra | 54 | JuliusBrussee/caveman | MIT | Compressed code review - one line per finding with location, problem and fix. Use for /caveman-review, "review this PR", or "review the diff". |
 | `investigate-first` | extra | 18 | JuliusBrussee/caveman | MIT | Diagnose ambiguous failures before editing. Use for unknown causes, intermittent behavior, performance regressions, or investigations needing evidence |
 | `lean-build` | extra | 20 | JuliusBrussee/caveman | MIT | Build feature work with high overbuilding risk. Use for new behavior, product slices, or integrations where repository reuse, strict scope, and an exp |
+| `ponytail-audit` | extra | 43 | DietrichGebert/ponytail | MIT | Whole-repo audit for over-engineering. Like ponytail-review, but scans the entire codebase instead of a diff: a ranked list of what to delete, simplif |
+| `ponytail-debt` | extra | 46 | DietrichGebert/ponytail | MIT | Harvest every `ponytail:` comment in the codebase into a debt ledger, so the deliberate shortcuts and deferrals ponytail leaves behind get tracked ins |
+| `ponytail-gain` | extra | 52 | DietrichGebert/ponytail | MIT | Show ponytail's measured impact as a compact scoreboard: less code, less cost, more speed, from the benchmark medians. One-shot display, not a persist |
+| `ponytail-help` | extra | 73 | DietrichGebert/ponytail | MIT | Quick-reference card for all ponytail modes, skills, and commands. One-shot display, not a persistent mode. Trigger: /ponytail-help, "ponytail help",  |
+| `ponytail-review` | extra | 59 | DietrichGebert/ponytail | MIT | Code review focused exclusively on over-engineering. Finds what to delete: reinvented standard library, unneeded dependencies, speculative abstraction |
 | `ultimate-protocol-simulator` | extra | 42 | KINGSTAR-OMEGA/claude-token-optimizer | MIT | Use this skill ALWAYS when the user explicitly requests "ultimate mode", "max efficiency", "binary mode", or asks you to write code with literally zer |
 
 ## Skills que dependem de ferramenta externa

@@ -6,10 +6,13 @@
 #   ./install.sh --tier all         # instala as 117 skills
 #   ./install.sh --copy             # copia em vez de symlinkar
 #   ./install.sh --target claude    # só numa CLI (pode repetir a flag)
+#   ./install.sh --tier all --category efficiency   # só uma categoria
 #   ./install.sh --list             # mostra o que seria instalado e onde
 #   ./install.sh --dry-run          # não escreve nada, só mostra
 #   ./install.sh --force            # sobrescreve skill já existente no destino
 #   ./install.sh --hooks            # instala também os hooks (ver hooks/README.md)
+#   ./install.sh --always-on        # deixa ponytail + caveman ativos em TODA sessão
+#                                   # (escreve no arquivo de instrução global de cada CLI)
 #   ./install.sh --uninstall        # remove os symlinks que este script criou
 #
 # Sem dependências além de bash, python3 e coreutils.
@@ -24,6 +27,8 @@ DRY=0
 LIST=0
 UNINSTALL=0
 DO_HOOKS=0
+DO_ALWAYS=0
+CAT=""
 TARGETS=()
 
 while [ $# -gt 0 ]; do
@@ -37,7 +42,10 @@ while [ $# -gt 0 ]; do
     --list) LIST=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
     --hooks) DO_HOOKS=1; shift ;;
+    --always-on) DO_ALWAYS=1; shift ;;
     --target) TARGETS+=("${2:?--target precisa de valor}"); shift 2 ;;
+    --category) CAT="${2:?--category precisa de valor: coding|thinking|teams|frontend|orchestration|efficiency}"; shift 2 ;;
+    --category=*) CAT="${1#*=}"; shift ;;
     --target=*) TARGETS+=("${1#*=}"); shift ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "flag desconhecida: $1" >&2; exit 2 ;;
@@ -86,11 +94,13 @@ STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/skills-kit"
 STATE_FILE="$STATE_DIR/installed.list"
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-python3 - "$MANIFEST" "$TIER" > "$TMP/list.tsv" <<'PY'
+python3 - "$MANIFEST" "$TIER" "${CAT:-*}" > "$TMP/list.tsv" <<'PY'
 import json, sys
-man, tier = json.load(open(sys.argv[1])), sys.argv[2]
+man, tier, cat = json.load(open(sys.argv[1])), sys.argv[2], sys.argv[3]
 for s in man["skills"]:
     if tier == "core" and s["tier"] != "core":
+        continue
+    if cat != "*" and s["category"] != cat:
         continue
     print(f'{s["category"]}\t{s["name"]}')
 PY
@@ -204,6 +214,15 @@ done
 echo
 echo "instalado: $created   pulado (ja existia): $skipped"
 [ "$skipped" != "0" ] && echo "use --force para sobrescrever os pulados"
+
+if [ "$DO_ALWAYS" = "1" ]; then
+  echo
+  if [ "$DRY" = "1" ]; then
+    bash "$REPO/hooks/install-always-on.sh" --dry-run
+  else
+    bash "$REPO/hooks/install-always-on.sh"
+  fi
+fi
 
 if [ "$DO_HOOKS" = "1" ]; then
   echo

@@ -5,10 +5,11 @@ aberto **Agent Skills** (`SKILL.md`), para instalar em **Claude Code, Codex,
 Hermes Agent, OpenCode e Prime Agent** — e em qualquer outra CLI que leia o
 padrão. Feito para sobreviver a uma formatação: clona, roda um script, pronto.
 
-- **140 skills** curadas de 10 fontes (30.539 linhas de instrução), todas validadas contra a spec
+- **146 skills** curadas de 11 fontes, todas validadas contra a spec
 - **6 hooks** testados (52 casos automatizados passando) numa política única que roda em várias CLIs
 - **13 MCPs** com versão conferida no registry em 2026-09-16
-- **11 skills de economia de token** (saída comprimida, contexto enxuto, edição em pedaço)
+- **17 skills de economia de token**, incluindo `ponytail` (lazy senior: reusar em vez de reescrever)
+- **`--always-on`**: deixa `ponytail` + `caveman` ativos em toda sessão, em todas as CLIs
 - **Nada de segredo no repo** — chaves vêm sempre de variável de ambiente
 
 Comando único (symlinks, tier core):
@@ -42,8 +43,8 @@ destino padrão, e o symlink mantém tudo atualizado depois de um `git pull`.
 ## Instalação
 
 ```bash
-./install.sh                 # tier core (34 skills) nas CLIs detectadas, via symlink
-./install.sh --tier all      # as 140 skills
+./install.sh                 # tier core (35 skills) nas CLIs detectadas, via symlink
+./install.sh --tier all      # as 146 skills
 ./install.sh --copy          # copia em vez de symlinkar (para CLIs sem suporte a symlink)
 ./install.sh --target prime  # força um destino (agents|claude|hermes|prime|opencode|crush|cursor|gemini)
 ./install.sh --list          # mostra exatamente o que iria para onde
@@ -58,7 +59,7 @@ O instalador nunca apaga nada: se um nome já existe no destino, ele pula e avis
 
 **Por que existe tier:** o Codex limita a lista inicial de skills a ~2% da janela
 de contexto e encurta descrições quando há muitas. Instalar 140 skills de uma vez
-degrada o disparo de todas. O `core` (34) é o conjunto que eu realmente uso; `extra`
+degrada o disparo de todas. O `core` (35) é o conjunto que eu realmente uso; `extra`
 entra por demanda (`--tier all`, ou copiando só o que interessar de `skills/`).
 
 ## O que tem dentro
@@ -70,7 +71,7 @@ entra por demanda (`--tier all`, ou copiando só o que interessar de `skills/`).
 | `skills/teams/` | 16 | Subagentes com contexto isolado, worktrees paralelos, review por outro agente, handoff |
 | `skills/frontend/` | 27 | Design system, acessibilidade, motion, e2e, QA visual, performance React |
 | `skills/orchestration/` | 23 | Loop autônomo, gates de avaliação, harness, MCP, custo/modelo, orquestração multi-CLI |
-| `skills/efficiency/` | 11 | Menos token por tarefa: saída comprimida, contexto enxuto, edição cirúrgica |
+| `skills/efficiency/` | 17 | Menos token por tarefa: reusar código em vez de escrever, saída comprimida, contexto enxuto |
 
 Catálogo completo, com origem, licença e tamanho de cada skill:
 [CATALOG.md](CATALOG.md). Metadado legível por máquina: [manifest.json](manifest.json).
@@ -104,6 +105,30 @@ conhecidos e deixam passar `rm -rf node_modules` e `rm -rf /tmp/build`. Um guard
 que dá falso positivo em trabalho normal é um guard que você desliga em uma
 semana.
 
+## Sempre ativo: ponytail + caveman
+
+```bash
+./hooks/install-always-on.sh              # todas as CLIs detectadas
+./hooks/install-always-on.sh --dry-run    # ver o que faria
+./hooks/install-always-on.sh --remove     # tirar
+```
+
+Escreve um bloco com marcador no arquivo de instrução permanente de cada CLI — o
+que ela lê no começo de toda sessão:
+
+| CLI | Arquivo | Fonte |
+|---|---|---|
+| Claude Code | `~/.claude/CLAUDE.md` | docs de skills/memória |
+| Codex | `~/.codex/AGENTS.md` (ou `AGENTS.override.md`, se existir) | guides/agents-md |
+| OpenCode | `~/.config/opencode/AGENTS.md` | docs/rules |
+| Prime Agent | `~/.prime/agent/AGENTS.md` | quickstart |
+| Hermes | `~/.hermes/SOUL.md` | identity slot #1 |
+
+O texto mora em [`hooks/always-on.md`](hooks/always-on.md) (fonte única, ~950 bytes ≈
+240 tokens por sessão). É idempotente, faz backup e o `--remove` desfaz. Efeito:
+o agente procura código existente antes de escrever (`ponytail`) e responde
+telegráfico (`caveman`) sem você pedir.
+
 ## MCPs
 
 13 servidores com versão fixada e verificada, mais o gerador que escreve a
@@ -129,7 +154,7 @@ python3 tools/validate-skills.py    # schema da spec: name/dir, description, fro
 bash tools/test-hooks.sh            # comportamental: os 52 casos dos hooks
 ```
 
-Ambos são stdlib-only. Estado atual nesta máquina: **140 skills, 0 erros, 0
+Ambos são stdlib-only. Estado atual nesta máquina: **146 skills, 0 erros, 0
 avisos; 52/52 casos de hook passando.**
 
 ## Manter e atualizar
@@ -145,8 +170,8 @@ cd ~/Skills && git pull      # symlinks continuam válidos: nada a recopiar
 Skills vindas de obra/superpowers (MIT), affaan-m/ECC (MIT),
 wshobson/agents (MIT), vercel-labs/agent-skills (MIT), anthropics/skills (Apache-2.0),
 bmad-code-org/BMAD-METHOD (MIT), JuliusBrussee/caveman (MIT na parte de skills),
-KINGSTAR-OMEGA/claude-token-optimizer (MIT), max-sixty/worktrunk (MIT/Apache-2.0)
-e 15 skills pessoais. Crédito por skill, licença,
+KINGSTAR-OMEGA/claude-token-optimizer (MIT), DietrichGebert/ponytail (MIT),
+max-sixty/worktrunk (MIT/Apache-2.0) e 15 skills pessoais. Crédito por skill, licença,
 estrelas medidas e o que foi alterado em cada arquivo: [SOURCES.md](SOURCES.md).
 O kit em si é MIT.
 
