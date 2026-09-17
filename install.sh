@@ -147,16 +147,45 @@ if [ "$UNINSTALL" = "1" ]; then
   exit 0
 fi
 
+# nomes de skill que JÁ existem no destino, em qualquer subpasta. O Hermes guarda
+# skill em <categoria>/<nome>/, então o mesmo nome pode entrar duplicado se a
+# checagem olhar só o caminho exato.
+existing_names() {
+  python3 - "$1" <<'PY'
+import os, pathlib, re, sys
+root = sys.argv[1]
+out = set()
+if os.path.isdir(root):
+    for dp, dn, fn in os.walk(root):
+        if "SKILL.md" in fn:
+            out.add(os.path.basename(dp))
+            try:
+                t = pathlib.Path(dp, "SKILL.md").read_text(encoding="utf-8", errors="replace")
+                m = re.search(r"^name:\s*(.+)$", t, re.M)
+                if m:
+                    out.add(m.group(1).strip().strip("\"'"))
+            except Exception:
+                pass
+for n in sorted(out):
+    print(n)
+PY
+}
+
 # ---- instala ----------------------------------------------------------------
 created=0; skipped=0
 for t in "${SELECTED[@]}"; do
   root="${DEST[$t]:-}"
   if [ -z "$root" ]; then echo "! target desconhecido: $t (ignore)" >&2; continue; fi
   echo "== $t -> $root"
+  existing_names "$root" > "$TMP/existing.txt" 2>/dev/null || : > "$TMP/existing.txt"
   [ "$DRY" = "1" ] || mkdir -p "$root"
   while IFS=$'\t' read -r cat name; do
     src="$REPO/skills/$cat/$name"
     if [ "$t" = "hermes" ]; then dst="$root/$cat/$name"; else dst="$root/$name"; fi
+    # nome já existe em outra pasta deste destino -> pular (evita skill duplicada)
+    if ! grep -qxF "$name" "$TMP/existing.txt"; then :; else
+      echo "   ~ $name (já existe no destino, em outra pasta)"; skipped=$((skipped+1)); continue
+    fi
     if [ -e "$dst" ] || [ -L "$dst" ]; then
       if [ "$FORCE" != "1" ]; then skipped=$((skipped+1)); continue; fi
       [ "$DRY" = "1" ] || rm -rf "$dst"

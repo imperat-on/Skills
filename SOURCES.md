@@ -1,60 +1,21 @@
 # Origens, licenças e créditos
 
-Todos os números abaixo foram medidos nesta máquina em **2026-09-16** (API do GitHub
-autenticada, `gh api repos/<repo>` e clones `--depth 1`). Onde eu não consegui medir,
-está escrito que não consegui.
+Números medidos nesta máquina com a API do GitHub autenticada e clones `--depth 1` (2026-09-16/17). Onde não deu para medir, está escrito.
 
-## Fontes
-
-| Fonte | Estrelas (2026-09-16) | Licença | Skills usadas | Último push |
+| Fonte | Estrelas | Licença | Skills usadas | Último push |
 |---|---|---|---|---|
-| [affaan-m/ECC](https://github.com/affaan-m/ECC) | 260,098 | MIT | 55 | 2026-09-15 |
-| [wshobson/agents](https://github.com/wshobson/agents) | 39,729 | MIT | 28 | 2026-09-14 |
+| [affaan-m/ECC](https://github.com/affaan-m/ECC) | 260098 | MIT | 55 | 2026-09-15 |
+| [wshobson/agents](https://github.com/wshobson/agents) | 39729 | MIT | 28 | 2026-09-14 |
 | `~/.hermes/skills` (skills pessoais do autor) | — | MIT | 15 | — |
-| [obra/superpowers](https://github.com/obra/superpowers) | 287,594 | MIT | 13 | 2026-09-14 |
-| [anthropics/skills](https://github.com/anthropics/skills) | 176,699 | Apache-2.0 | 6 | 2026-09-10 |
-| [bmad-code-org/BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) | 53,104 | MIT | 6 | 2026-09-16 |
-| [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | 31,248 | MIT (declarada no README) | 5 | 2026-08-28 |
-| [max-sixty/worktrunk](https://github.com/max-sixty/worktrunk) | 7,910 | MIT OR Apache-2.0 | 1 | 2026-09-16 |
+| [obra/superpowers](https://github.com/obra/superpowers) | 287594 | MIT | 13 | 2026-09-14 |
+| [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | 106123 | MIT | 9 | 2026-09-16 |
+| [anthropics/skills](https://github.com/anthropics/skills) | 176699 | Apache-2.0 | 6 | 2026-09-10 |
+| [bmad-code-org/BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) | 53104 | MIT | 6 | 2026-09-16 |
+| [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | 31248 | MIT | 5 | 2026-08-28 |
+| [KINGSTAR-OMEGA/claude-token-optimizer](https://github.com/KINGSTAR-OMEGA/claude-token-optimizer) | 121 | MIT | 2 | 2026-04-12 |
+| [max-sixty/worktrunk](https://github.com/max-sixty/worktrunk) | 7910 | MIT OR Apache-2.0 | 1 | 2026-09-16 |
 
-Total: **129 skills**, 29892 linhas de `SKILL.md`.
-
-Repos que apareceram na pesquisa e **não** viraram dependência (com o motivo) estão em
-[REPORT.md](REPORT.md) §4.
-
-Duas exceções que valem registro:
-
-- **vercel-labs/agent-skills** não tem arquivo `LICENSE` nem metadado no
-  `package.json`; a licença MIT está **declarada numa seção do README**. Aceitei por
-  ser declaração explícita do dono do repositório, não por omissão silenciosa.
-- **worktrunk** é dual `MIT OR Apache-2.0`.
-
-Três skills do `vercel-labs/agent-skills` publicam no frontmatter um `name` diferente
-do nome da pasta (`vercel-react-best-practices` numa pasta `react-best-practices`), o
-que viola a regra "name == pasta" da spec. Aqui a pasta foi renomeada para casar com
-o `name` — nenhum arquivo foi editado.
-
-## O que foi alterado em cada arquivo
-
-Cada skill é uma cópia fiel do original. A única edição foi **adicionar o campo
-`license:`** no frontmatter quando ele não existia (106 arquivos) — metadado exigido
-pela spec Agent Skills e que os repositórios de origem declaram só no nível do repo.
-Nenhuma linha de instrução foi reescrita, resumida ou traduzida.
-
-Para auditar: `manifest.json` guarda `upstream_path`, `upstream_sha256` (hash do arquivo
-no repositório de origem) e `bundled_sha256` (hash do arquivo aqui).
-
-```bash
-# conferir um arquivo contra a origem
-python3 - <<'EOF'
-import json, hashlib, pathlib
-for s in json.load(open('manifest.json'))['skills']:
-    p = pathlib.Path('skills')/s['category']/s['name']/'SKILL.md'
-    h = hashlib.sha256(p.read_bytes()).hexdigest()[:16]
-    if h != s['bundled_sha256']: print('DIVERGIU:', s['name'])
-print('conferido')
-EOF
-```
+Total: **140 skills**, 30539 linhas de `SKILL.md`.
 
 ## Crédito por skill
 
@@ -96,6 +57,17 @@ EOF
 | `receiving-code-review` | coding | extra | [obra/superpowers](https://github.com/obra/superpowers) | MIT | 206 |
 | `simplify-code` | coding | extra | skills pessoais do autor | MIT | 271 |
 | `sql-optimization-patterns` | coding | extra | [wshobson/agents](https://github.com/wshobson/agents) | MIT | 215 |
+| `caveman` | efficiency | core | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 91 |
+| `antigravity-protocol` | efficiency | extra | [KINGSTAR-OMEGA/claude-token-optimizer](https://github.com/KINGSTAR-OMEGA/claude-token-optimizer) | MIT | 59 |
+| `cavecrew` | efficiency | extra | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 79 |
+| `caveman-commit` | efficiency | extra | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 65 |
+| `caveman-compress` | efficiency | extra | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 111 |
+| `caveman-explore` | efficiency | extra | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 44 |
+| `caveman-help` | efficiency | extra | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 64 |
+| `caveman-review` | efficiency | extra | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 54 |
+| `investigate-first` | efficiency | extra | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 18 |
+| `lean-build` | efficiency | extra | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | MIT | 20 |
+| `ultimate-protocol-simulator` | efficiency | extra | [KINGSTAR-OMEGA/claude-token-optimizer](https://github.com/KINGSTAR-OMEGA/claude-token-optimizer) | MIT | 42 |
 | `accessibility` | frontend | core | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 148 |
 | `e2e-testing` | frontend | core | [affaan-m/ECC](https://github.com/affaan-m/ECC) | MIT | 328 |
 | `frontend-design` | frontend | core | [anthropics/skills](https://github.com/anthropics/skills) | Apache-2.0 | 72 |
@@ -190,16 +162,4 @@ EOF
 | `writing-guidelines` | thinking | extra | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | MIT | 40 |
 | `writing-skills` | thinking | extra | [obra/superpowers](https://github.com/obra/superpowers) | MIT | 680 |
 
-(129 skills; hash de cada arquivo no original em `manifest.json`)
-
-## Terceiros citados no material de apoio
-
-- **affaan-m/ECC** (MIT) — o schema de `hooks/configs/cursor.hooks.json` foi derivado do
-  arquivo `.cursor/hooks.json` daquele repositório; o `hooks/README.md` marca isso como
-  não conferido na documentação oficial do Cursor.
-- **obra/superpowers** (MIT) — a ideia de `install` por harness e o vocabulário de
-  fluxo (brainstorm → plano → subagentes → review) vêm do README dele.
-- Os dossiês em `research/` foram produzidos por pesquisa própria (web + API do GitHub)
-  e trazem, cada um, a contagem de itens marcados como **NAO_VALIDADO**.
-- Fontes de documentação oficial usadas: `agentskills.io/specification`, docs de Claude
-  Code, Codex, OpenCode, Prime Agent (local) e Hermes Agent (local).
+Hash do arquivo original de cada skill: `manifest.json` (`upstream_sha256`). A única edição feita nos arquivos é o campo `license:` quando o original não trazia.

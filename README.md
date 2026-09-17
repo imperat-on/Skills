@@ -5,9 +5,10 @@ aberto **Agent Skills** (`SKILL.md`), para instalar em **Claude Code, Codex,
 Hermes Agent, OpenCode e Prime Agent** — e em qualquer outra CLI que leia o
 padrão. Feito para sobreviver a uma formatação: clona, roda um script, pronto.
 
-- **129 skills** curadas de 8 fontes (29.892 linhas de instrução), todas validadas contra a spec
+- **140 skills** curadas de 10 fontes (30.539 linhas de instrução), todas validadas contra a spec
 - **6 hooks** testados (52 casos automatizados passando) numa política única que roda em várias CLIs
 - **13 MCPs** com versão conferida no registry em 2026-09-16
+- **11 skills de economia de token** (saída comprimida, contexto enxuto, edição em pedaço)
 - **Nada de segredo no repo** — chaves vêm sempre de variável de ambiente
 
 Comando único (symlinks, tier core):
@@ -41,8 +42,8 @@ destino padrão, e o symlink mantém tudo atualizado depois de um `git pull`.
 ## Instalação
 
 ```bash
-./install.sh                 # tier core (33 skills) nas CLIs detectadas, via symlink
-./install.sh --tier all      # as 129 skills
+./install.sh                 # tier core (34 skills) nas CLIs detectadas, via symlink
+./install.sh --tier all      # as 140 skills
 ./install.sh --copy          # copia em vez de symlinkar (para CLIs sem suporte a symlink)
 ./install.sh --target prime  # força um destino (agents|claude|hermes|prime|opencode|crush|cursor|gemini)
 ./install.sh --list          # mostra exatamente o que iria para onde
@@ -56,8 +57,8 @@ O instalador nunca apaga nada: se um nome já existe no destino, ele pula e avis
 `~/.local/state/skills-kit/installed.list`, que é o que o `--uninstall` usa.
 
 **Por que existe tier:** o Codex limita a lista inicial de skills a ~2% da janela
-de contexto e encurta descrições quando há muitas. Instalar 123 skills de uma vez
-degrada o disparo de todas. O `core` (33) é o conjunto que eu realmente uso; `extra`
+de contexto e encurta descrições quando há muitas. Instalar 140 skills de uma vez
+degrada o disparo de todas. O `core` (34) é o conjunto que eu realmente uso; `extra`
 entra por demanda (`--tier all`, ou copiando só o que interessar de `skills/`).
 
 ## O que tem dentro
@@ -69,6 +70,7 @@ entra por demanda (`--tier all`, ou copiando só o que interessar de `skills/`).
 | `skills/teams/` | 16 | Subagentes com contexto isolado, worktrees paralelos, review por outro agente, handoff |
 | `skills/frontend/` | 27 | Design system, acessibilidade, motion, e2e, QA visual, performance React |
 | `skills/orchestration/` | 23 | Loop autônomo, gates de avaliação, harness, MCP, custo/modelo, orquestração multi-CLI |
+| `skills/efficiency/` | 11 | Menos token por tarefa: saída comprimida, contexto enxuto, edição cirúrgica |
 
 Catálogo completo, com origem, licença e tamanho de cada skill:
 [CATALOG.md](CATALOG.md). Metadado legível por máquina: [manifest.json](manifest.json).
@@ -127,7 +129,7 @@ python3 tools/validate-skills.py    # schema da spec: name/dir, description, fro
 bash tools/test-hooks.sh            # comportamental: os 52 casos dos hooks
 ```
 
-Ambos são stdlib-only. Estado atual nesta máquina: **129 skills, 0 erros, 0
+Ambos são stdlib-only. Estado atual nesta máquina: **140 skills, 0 erros, 0
 avisos; 52/52 casos de hook passando.**
 
 ## Manter e atualizar
@@ -142,7 +144,9 @@ cd ~/Skills && git pull      # symlinks continuam válidos: nada a recopiar
 
 Skills vindas de obra/superpowers (MIT), affaan-m/ECC (MIT),
 wshobson/agents (MIT), vercel-labs/agent-skills (MIT), anthropics/skills (Apache-2.0),
-bmad-code-org/BMAD-METHOD (MIT), max-sixty/worktrunk (MIT/Apache-2.0) e 15 skills pessoais. Crédito por skill, licença,
+bmad-code-org/BMAD-METHOD (MIT), JuliusBrussee/caveman (MIT na parte de skills),
+KINGSTAR-OMEGA/claude-token-optimizer (MIT), max-sixty/worktrunk (MIT/Apache-2.0)
+e 15 skills pessoais. Crédito por skill, licença,
 estrelas medidas e o que foi alterado em cada arquivo: [SOURCES.md](SOURCES.md).
 O kit em si é MIT.
 
