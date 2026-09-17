@@ -596,25 +596,36 @@ class TestScopeEnforcement(OrchTestCase):
         self.prepare_task("a")
         r = self.orch("guard", "--id", "a", "--plan")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        plan = json.loads(r.stdout)["prevention_plan"]
-        # A versão instalada do opencode recusa o env gerado: o plano tem de dizer a verdade em vez
-        # de anunciar prevenção mecânica que o worker não consegue nem iniciar.
-        self.assertEqual(plan["prevention"], "none")
+        out = json.loads(r.stdout)
+        plan = out["prevention_plan"]
+        # v1.4: o mecanismo foi PROVADO em força no opencode 1.18.31 (arquivo via OPENCODE_CONFIG):
+        # `opencode debug config` reporta as regras, uma edição fora do allow-list foi recusada e o
+        # arquivo ficou intacto. O plano diz "mechanical" porque é verdade.
+        self.assertEqual(plan["prevention"], "mechanical")
         self.assertEqual(plan["kind"], "opencode")
-        self.assertEqual(plan["launch_env"], {})
-        self.assertTrue(any("rejects the generated configuration" in lim
-                            for lim in plan["limitations"]), plan["limitations"])
-        self.assertTrue(any("commit gate" in lim for lim in plan["limitations"]))
-        # As regras continuam implementadas e continuam testáveis fora da CLI.
+        self.assertEqual(out["kind_source"], "launch-record")   # resolvido do registro, não "auto"
         import sys as _sys
         _sys.path.insert(0, str(Path(__file__).resolve().parent))
         import scope_guard as sg
-        permission = sg.opencode_permission({"task_id": "a", "write_scope": ["src/app/**"],
-                                            "forbidden_scope": ["backend/**"]})
+        env_var = sg.KIND_ADAPTERS["opencode"]["env_var"]
+        env_value = plan["launch_env"][env_var]
+        self.assertTrue(Path(env_value).is_file(), f"o env aponta para um arquivo gerado: {env_value}")
+        self.assertTrue(any("bash" in lim for lim in plan["limitations"]), plan["limitations"])
+        # o plano é PERSISTIDO (o run de 2026-09-17 não tinha arquivo nenhum em disco)
+        self.assertTrue((self.root / ".orchestrator" / "guards" / "a" / "prevention-plan.json").is_file())
+        # um caminho sem glob vale nas DUAS leituras: arquivo e diretório
+        permission = sg.opencode_permission({"task_id": "a", "write_scope": ["src/app/**", "src/stats.py"],
+                                            "forbidden_scope": ["backend/**", "tests/x.py"]})
         self.assertEqual(permission["edit"]["*"], "deny")
         self.assertEqual(permission["edit"]["src/app/**"], "allow")
+        self.assertEqual(permission["edit"]["src/stats.py"], "allow")
+        self.assertEqual(permission["edit"]["src/stats.py/**"], "allow")
         self.assertEqual(permission["edit"]["backend/**"], "deny")
+        self.assertEqual(permission["edit"]["tests/x.py"], "deny")
         self.assertEqual(permission["external_directory"]["*"], "deny")
+        # o shell é a segunda porta: deny por padrão, com o que o run precisa
+        self.assertEqual(permission["bash"]["*"], "deny")
+        self.assertEqual(permission["bash"]["git commit*"], "allow")
 
     def test_launch_verification_rejects_unusable_payloads_without_crashing(self):
         self.init()

@@ -35,6 +35,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -482,20 +483,22 @@ def uninstall_hook(worktree) -> dict:
 
 KIND_ADAPTERS = {
     "opencode": {
-        "mechanism": "permission.edit deny-by-default via OPENCODE_PERMISSION / "
-                     "OPENCODE_CONFIG_CONTENT",
+        "mechanism": "permission rules (edit deny-by-default + allow-list, external_directory deny) "
+                     "injected as a run-owned config FILE through OPENCODE_CONFIG",
         "write_boundary": "sub-path",
-        "verified_on": "opencode 1.18.30 on this host: `opencode debug config` reports the injected "
-                       "rules even when the project config says edit=allow (project config wins over "
-                       "a plain OPENCODE_CONFIG file, which is why the env content is used)",
+        "verified_on": "opencode 1.18.31 on this host: with OPENCODE_CONFIG=<generated file>, "
+                       "`opencode debug config` reports the injected rules; `opencode run` was refused "
+                       "editing a file outside the allow list ('The user has specified a rule which "
+                       "prevents you from using this specific tool call') and the file stayed "
+                       "unchanged; the deny held against a project .opencode/opencode.json saying "
+                       "edit=allow. OPENCODE_PERMISSION, OPENCODE_CONFIG_CONTENT and the project "
+                       "config alone did NOT show up in the effective config.",
         "probe": ["opencode", "debug", "config"],
-        "env_var": "OPENCODE_PERMISSION",
-        "alt_env_var": "OPENCODE_CONFIG_CONTENT",
-        "notes": "deny rules are enforced even in --auto mode",
-        "env_status": "rejected",
-        "env_status_detail": "opencode 1.18.30 refuses this shape: permission.edit must not be a plain "
-                             "string map; startup dies with `Expected PermissionActionConfig` and the "
-                             "agent never becomes ready. Do not export the env for this version.",
+        "env_var": "OPENCODE_CONFIG",
+        "env_is_file": True,
+        "notes": "deny rules hold in --auto mode; the shell is a SEPARATE boundary: an edit-only "
+                 "boundary was bypassed in a live test by writing through bash, so bash is denied by "
+                 "default with the run's own commands allowed",
     },
     "codex": {
         "mechanism": "sandbox workspace-write (writes confined to the worktree)",
@@ -528,11 +531,34 @@ def opencode_permission(contract: dict) -> dict:
         if pattern.strip() in ("**", "*"):
             continue
         edit[normalize_pattern(pattern)] = "allow"
+        # A bare path means a FILE as often as a directory: `src/stats.py` normalised to
+        # `src/stats.py/**` never matches the file, so the worker was denied its own scope and
+        # then wrote through the shell. Emit both readings, exactly like path_matches does.
+        raw = normalize_pattern(pattern, directory=False)
+        if raw != normalize_pattern(pattern):
+            edit.setdefault(raw, "allow")
     for pattern in scope_patterns(contract, "forbidden_scope"):
         edit[normalize_pattern(pattern)] = "deny"
+        raw = normalize_pattern(pattern, directory=False)
+        if raw != normalize_pattern(pattern):
+            edit.setdefault(raw, "deny")
+    # The shell is a second door to the same filesystem: a live test showed an edit-only boundary
+    # being bypassed with `echo >>` (Edit denied, file written anyway). Bash is therefore denied by
+    # default too, with only what the run itself needs allowed: git porcelain + the contract's own
+    # required checks. Compound commands remain a residual hole (detected by validate-scope and the
+    # commit gate, not prevented).
+    bash = {"*": "deny"}
+    for allowed in ("git status*", "git diff*", "git add*", "git commit*", "git log*",
+                    "git rev-parse*", "git show*", "git branch*"):
+        bash[allowed] = "allow"
+    for check in (contract.get("required_checks") or []):
+        cmd = str(check).strip()
+        if cmd:
+            bash[cmd if cmd.endswith("*") else cmd + "*"] = "allow"
     return {
         "edit": edit,
         "external_directory": {"*": "deny"},
+        "bash": bash,
     }
 
 
@@ -557,6 +583,12 @@ def plan_prevention(contract: dict, kind: str, *, out_dir) -> dict:
         plan["limitations"].append(
             f"no verified write-boundary mechanism for kind {kind!r} on this host: the worker keeps "
             f"the whole-worktree boundary only, so out-of-scope writes are caught by detection")
+        plan["limitations"].append(
+            "a bare 'auto' kind means the guard never looked for an adapter: pass `--kind <the kind "
+            "you will launch>` (or record the launch before installing the guard)")
+        plan_file = out_dir / "prevention-plan.json"
+        plan_file.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+        plan["artifacts"].append(str(plan_file))
         return plan
 
     plan["mechanism"] = adapter["mechanism"]
@@ -584,11 +616,12 @@ def plan_prevention(contract: dict, kind: str, *, out_dir) -> dict:
         permission_file = out_dir / "opencode-permission.json"
         permission_file.write_text(json.dumps({"permission": permission}, indent=2) + "\n",
                                    encoding="utf-8")
-        payload = json.dumps(permission, separators=(",", ":"))
+        env_value = str(permission_file) if adapter.get("env_is_file") else \
+            json.dumps(permission, separators=(",", ":"))
         plan.update({
             "prevention": "mechanical",
-            "launch_env": {adapter["env_var"]: payload},
-            "launch_env_export": [f"export {adapter['env_var']}={shlex.quote(payload)}"],
+            "launch_env": {adapter["env_var"]: env_value},
+            "launch_env_export": [f"export {adapter['env_var']}={shlex.quote(env_value)}"],
             "verification": {
                 "exists": bool(adapter.get("probe")),
                 "probe": adapter.get("probe"),
@@ -600,10 +633,11 @@ def plan_prevention(contract: dict, kind: str, *, out_dir) -> dict:
             },
             "artifacts": [str(permission_file)],
             "limitations": [
-                "covers the `edit` tool (edit/write/patch) and external_directory; a shell command "
-                "can still write outside the scope",
-                f"the environment variable must reach the worker process "
-                f"({adapter['env_var']} or {adapter['alt_env_var']}); verify before dispatch",
+                "covers the `edit` tool, external_directory and `bash` (deny-by-default with the "
+                "run's own commands allowed); a compound shell command that embeds an allowed prefix "
+                "is a residual hole, caught by validate-scope and the commit gate",
+                f"the file must reach the worker process: export {adapter['env_var']} with the path "
+                f"({permission_file}); verify before dispatch",
             ],
         })
     elif adapter["write_boundary"] == "worktree":
@@ -679,9 +713,13 @@ def verify_launch(contract: dict, kind: str, *, cwd=None, observed: str | None =
     if not probe:
         result["reasons"].append("no probe command for this kind")
         return result
-    env = {adapter["env_var"]: intended}
     import os
-    full_env = {**os.environ, **env}
+    env_value = intended
+    if adapter.get("env_is_file"):
+        with tempfile.NamedTemporaryFile("w", suffix="-permission.json", delete=False) as fh:
+            fh.write(json.dumps({"permission": permission}))
+            env_value = fh.name
+    full_env = {**os.environ, adapter["env_var"]: env_value}
     try:
         proc = subprocess.run(probe, cwd=str(cwd) if cwd else None, capture_output=True, text=True,
                               timeout=120, env=full_env)

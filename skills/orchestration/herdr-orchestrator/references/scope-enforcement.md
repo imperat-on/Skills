@@ -13,13 +13,14 @@ mechanism below has a documented boundary.
 
 ## Layer A - what is mechanically enforceable today
 
-A mechanism is Layer A only once it is proven IN FORCE against the installed binary version. The opencode
-adapter is the cautionary case: 1.18.30 rejects the generated `permission.edit` shape at startup
-(`Expected PermissionActionConfig`), so the exported environment does not restrict the worker - it stops
-the worker from starting, and the run burns time on what looks like a permission problem. When the
-adapter reports the environment as rejected, `guard --plan` emits `prevention: none` with the reason and
-the run falls back to the commit gate plus `validate-scope`. Re-verify the mechanism whenever the CLI
-version changes.
+A mechanism is Layer A only once it is proven IN FORCE against the installed binary version. The
+opencode adapter is the cautionary case: **1.18.30** rejects the generated `permission.edit` shape at
+startup (`Expected PermissionActionConfig`), so exporting that environment does not restrict the worker
+- it stops the worker from starting. **1.18.31** accepts the shape and the mechanism was proven in
+force (see the table). When an adapter reports the environment as rejected, `guard --plan` emits
+`prevention: none` with the reason and the run falls back to the commit gate plus `validate-scope`.
+Re-verify the mechanism whenever the CLI version changes - the version in the evidence column is part
+of the claim.
 
 Every mechanism below was verified on this host before being claimed. Nothing else is implied; for a
 kind without a verified mechanism the honest answer is `prevention: none`.
@@ -27,7 +28,7 @@ kind without a verified mechanism the honest answer is `prevention: none`.
 | Mechanism | Boundary | Evidence | Bypass |
 |---|---|---|---|
 | `git config --worktree core.hooksPath` + a run-owned `pre-commit` gate | every commit in the worktree: a staged path outside `write_scope` / inside `forbidden_scope` refuses the commit | git 2.55.0: the linked worktree's commit is refused, the shared checkout's hooks path is untouched | `git commit --no-verify` (then Layer B catches it) |
-| `OPENCODE_PERMISSION` (or `OPENCODE_CONFIG_CONTENT`) with `edit` deny-by-default + `write_scope` allows + `external_directory` deny | the `edit` tool (edit/write/patch) at sub-path resolution, for opencode | opencode 1.18.30: `opencode debug config` reports the injected rules even when the project config says `edit: allow`. A plain `OPENCODE_CONFIG` **file** is overridden by the project config and is therefore never used alone | a shell command can still write files |
+| `OPENCODE_CONFIG` pointing at a run-owned config FILE, with `edit` deny-by-default + `write_scope` allows + `external_directory: deny` + `bash` deny-by-default | the `edit` tool at sub-path resolution, external directories, and the shell, for opencode | opencode **1.18.31**: `opencode debug config` reports the injected rules (`verified: true`, exit 0 via `guard --verify-launch`); a live `opencode run` was refused editing a file outside the allow-list (`The user has specified a rule which prevents you from using this specific tool call`) with the file unchanged; the deny held against a project `.opencode/opencode.json` saying `edit: allow`. `OPENCODE_PERMISSION`, `OPENCODE_CONFIG_CONTENT` and the project config alone did **not** appear in the effective config - three mechanisms that look plausible and do nothing | a compound command embedding an allowed prefix (`git commit*` … `&& echo x > f`); caught by Layer B and the commit gate. A bare path in the permission map needs BOTH readings (`src/stats.py` and `src/stats.py/**`) or the worker is denied its own file and escapes through the shell |
 | `codex -s workspace-write` | coarse: writes confined to the worktree | codex-cli 0.154.0 (advertised flags) | no sub-path denial at all |
 | claude `--settings` / `--permission-mode` | **not claimed**: deny-rule behaviour under `bypassPermissions` was not verified here | claude 2.1.263 exposes the flags only | treat as detection-only |
 | any other kind | none | no verified mechanism | detection only |

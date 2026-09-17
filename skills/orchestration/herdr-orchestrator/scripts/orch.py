@@ -1087,9 +1087,16 @@ def cmd_guard(a) -> int:
              f"checkout would be a false prevention claim. Record it first "
              f"(`set-task --id {a.id} --worktree <path>`) or pass --worktree explicitly.")
     worktree = Path(recorded or state["repo"]["root"]).expanduser().resolve()
-    kind = a.kind or (task.get("worker_execution") or {}).get("kind") \
-        or task.get("preferred_agent_kind") or "auto"
-    out = {"task_id": a.id, "kind": kind, "worktree": str(worktree)}
+    launch = task.get("worker_execution") or {}
+    if a.kind:
+        kind, kind_source = a.kind, "cli"
+    elif launch.get("kind"):
+        kind, kind_source = launch["kind"], "launch-record"
+    elif (task.get("preferred_agent_kind") or "auto") != "auto":
+        kind, kind_source = task["preferred_agent_kind"], "preferred"
+    else:
+        kind, kind_source = "auto", "default"
+    out = {"task_id": a.id, "kind": kind, "kind_source": kind_source, "worktree": str(worktree)}
     rc = 0
     if a.install_hook or not (a.plan or a.verify_launch):
         installed = SG.install_hook(contract, worktree, root)

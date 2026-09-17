@@ -1,7 +1,7 @@
 ---
 name: herdr-orchestrator
 description: "Orchestrate parallel agent teams in Herdr with review."
-version: 1.4.0
+version: 1.5.0
 author: Davi Kolansinsky (imperat-on), Hermes Agent
 license: MIT
 platforms: [linux, macos]
@@ -774,10 +774,22 @@ state files are hints. Details: `references/state-and-recovery.md`.
 - **A worktree parked beside the repository.** Anything that looks like scratch gets cleaned up by
   the user; a deleted worktree kills its panes, agents and uncommitted work at once. Keep worktrees
   under the run area and recover with `orch.py resume --recreate`.
-- **Claiming prevention the binary rejects.** The opencode adapter announced a mechanical write
-  boundary whose environment the installed version refuses at startup: the worker never became
-  ready. Prove the mechanism against the installed version before dispatch, or record
-  `prevention: none` and lean on the commit gate.
+- **Claiming prevention the binary rejects.** The opencode adapter once announced a mechanical write
+  boundary whose environment the installed version refuses at startup (1.18.30: `Expected
+  PermissionActionConfig`), so the worker never became ready. The identical mechanism IS in force on
+  1.18.31 - proven with `guard --verify-launch` (exit 0, `verified: true`) plus a live block. The
+  version is part of the claim: prove the mechanism against the installed binary before dispatch, or
+  record `prevention: none` and lean on the commit gate.
+- **Three plausible mechanisms that do nothing.** `OPENCODE_PERMISSION`, `OPENCODE_CONFIG_CONTENT` and
+  a project `.opencode/opencode.json` all *look* like write boundaries on opencode 1.18.31 and none of
+  them shows up in `opencode debug config`. Only `OPENCODE_CONFIG` pointing at a file did. A mechanism
+  that "should work" is not a mechanism: run the probe.
+- **An edit-only write boundary.** With only `edit` constrained, a live worker was denied an edit and
+  **wrote the file through the shell** anyway - the boundary looked green and leaked. Constrain `bash`
+  deny-by-default too (the run allows `git status/diff/add/commit/log/rev-parse/show/branch` and the
+  contract's own `required_checks`); compound commands remain a residual hole that Layer B and the
+  commit gate catch. And a bare path in the permission map needs **both** readings - `src/stats.py`
+  and `src/stats.py/**` - or the worker is denied its own file and goes looking for another door.
 - **Two workers sharing one scope gate.** The install resolves the target from the process
   environment: a live run ended with both worktrees pointing at one guard (worker B validated against
   worker A's scope, its own scope unguarded) *and* `installed: true` in the log. Create the worktree,
@@ -891,6 +903,12 @@ The skill is working when this scenario completes with real evidence:
     installed on the shared checkout.
 37. Generated artifacts (`__pycache__/`, `node_modules/`, build output) neither produce scope
     violations nor make a worktree read as dirty, and a real authored file still does both.
+38. Every claimed prevention mechanism is proven in force against the installed binary version
+    (`guard --verify-launch` exits 0 with `verified: true`) and the guard artifact the plan points at
+    exists on disk; the same claim names that version, so a version change invalidates it.
+39. The write boundary covers the shell as well as the edit tool (bash deny-by-default with the run's
+    own commands allowed), and a bare path in the permission map carries both readings
+    (`src/x.py` and `src/x.py/**`).
 
 12. **Retro and metrics** — collect the run metrics block (`references/budget-and-routing.md`):
     tokens in/out, cache-hit share, model per task, wall time, dispatches per accepted task,
