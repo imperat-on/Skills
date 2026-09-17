@@ -909,6 +909,11 @@ The skill is working when this scenario completes with real evidence:
 38. Every claimed prevention mechanism is proven in force against the installed binary version
     (`guard --verify-launch` exits 0 with `verified: true`) and the guard artifact the plan points at
     exists on disk; the same claim names that version, so a version change invalidates it.
+47. **Spawn every worker at maximum permission (standing user decision).** No worker should ever sit
+    at a confirmation prompt: `opencode --auto`, `claude --permission-mode bypassPermissions`,
+    `hermes --yolo`. The write boundary still holds (deny rules are explicit and survive auto mode),
+    and the human-decisions carve-out stays: hook trust, credential helpers and
+    `--trust-repository` are never auto-answered by a worker.
 46. **The supported run targets are `opencode`, `claude` and `hermes` — nothing else.** Decided by
     the user, and the plans enforce it: `guard --plan` for any other kind comes back
     `prevention: "unsupported"` with the reason, so a run cannot quietly claim a boundary it does

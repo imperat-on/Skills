@@ -66,6 +66,12 @@ python3 $O --repo-root <repo> guard --id <t> --install-hook --kind opencode --pl
   of relative `edit` patterns and refuses even the scoped file. `OPENCODE_PERMISSION` and
   `OPENCODE_CONFIG_CONTENT` are inert.
 
+**Give every worker its own workspace.** Never split a worker beside the user's pane: they read and
+type there. `herdr pane move <pane> --new-workspace --label <task> --no-focus` (or
+`herdr workspace create --label <task> --cwd <worktree>`); the user's workspace must end up holding
+only their own pane. `pane move --tab` needs `--split` + a target pane — `--new-workspace` is the
+form that never lands in someone's view.
+
 ## 3. Dispatch (no `--wait`; target by pane)
 
 ```bash
