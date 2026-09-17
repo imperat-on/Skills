@@ -2,7 +2,7 @@
 
 > Bloco abaixo é para ser copiado inteiro e colado num agente com acesso a
 > terminal (Claude Code, Codex, Hermes Agent, OpenCode, Prime Agent, Gemini CLI,
-> Cursor…). Ele instala as skills, e opcionalmente hooks e MCPs, e verifica o
+> Cursor…). Ele instala as skills, e opcionalmente os hooks, e verifica o
 > resultado. Não precisa de contexto anterior.
 
 ---
@@ -52,16 +52,11 @@ na ordem, mostre o resultado de cada verificação e **não pule o passo 4**.
    Eles bloqueiam comandos destrutivos e acesso a credenciais. Se o usuário não
    quiser, pare aqui — as skills funcionam sem os hooks.
 
-5. MCPs (opcional, também exige autorização — envolvem tokens):
-
-   ```bash
-   python3 tools/gen-mcp-configs.py --list
-   ```
-
-   A partir daí, aplique só os que o usuário pedir, usando os arquivos gerados em
-   `mcp/generated/` (ou `prime-agent mcp add`, no caso do Prime Agent). Explique
-   que `filesystem` e `github` ampliam muito o acesso e não devem ser ligados sem
-   necessidade.
+5. **MCPs: não estão neste kit** (de propósito — servidor MCP entra em toda
+   chamada da API e infla o contexto). Se o usuário pedir, o catálogo com versões
+   conferidas, o gerador de config por CLI e o instalador estão em
+   `~/Documents/projects/docs-davi/mcp-catalogo/`. Explique que `filesystem` e
+   `github` ampliam muito o acesso e não devem ser ligados sem necessidade.
 
 6. Confirme que a CLI enxerga as skills — reinicie a sessão (o índice é lido no
    start) e rode:

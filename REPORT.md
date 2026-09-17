@@ -212,6 +212,15 @@ Apontadas com número medido, para decidir depois:
 `bash tools/test-hooks.sh`, `python3 tools/gen-mcp-configs.py`. Os dossiês em `research/`
 foram escritos por cinco frentes de pesquisa paralelas em 2026-09-16.*
 
+## Decisão (2026-09-17): MCP fora do kit
+
+O catálogo de MCPs (13 servidores, versões conferidas, gerador de config por CLI)
+saiu do repositório e vive em `~/Documents/projects/docs-davi/mcp-catalogo/`.
+Motivo: MCP entra em toda chamada da API (104 ferramentas no Hermes hoje) e o
+objetivo do kit é reduzir custo de contexto, não aumentar. As seções abaixo ficam
+como registro da pesquisa que foi feita — inclusive a armadilha dos nomes de
+pacote npm e o teste ao vivo no OpenCode, que usou uma config de projeto.
+
 ## Verificação ao vivo — OpenCode 1.18.31 (2026-09-17)
 
 Instalado e exercitado numa CLI que não é o Hermes, para provar que o kit não é

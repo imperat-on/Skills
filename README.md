@@ -1,13 +1,12 @@
-# Skills — kit portátil de skills, hooks e MCPs para CLIs de código
+# Skills — kit portátil de skills e hooks para CLIs de código
 
-Um repositório só com as skills, os hooks e os MCPs que valem a pena, no formato
+Um repositório só com as skills e os hooks que valem a pena, no formato
 aberto **Agent Skills** (`SKILL.md`), para instalar em **Claude Code, Codex,
 Hermes Agent, OpenCode e Prime Agent** — e em qualquer outra CLI que leia o
 padrão. Feito para sobreviver a uma formatação: clona, roda um script, pronto.
 
 - **146 skills** curadas de 11 fontes, todas validadas contra a spec
 - **6 hooks** testados (52 casos automatizados passando) numa política única que roda em várias CLIs
-- **13 MCPs** com versão conferida no registry em 2026-09-16
 - **17 skills de economia de token**, incluindo `ponytail` (lazy senior: reusar em vez de reescrever)
 - **`--always-on`**: deixa `ponytail` + `caveman` ativos em toda sessão, em todas as CLIs
 - **Nada de segredo no repo** — chaves vêm sempre de variável de ambiente
@@ -129,21 +128,17 @@ O texto mora em [`hooks/always-on.md`](hooks/always-on.md) (fonte única, ~950 b
 o agente procura código existente antes de escrever (`ponytail`) e responde
 telegráfico (`caveman`) sem você pedir.
 
-## MCPs
+## MCPs — de propósito, fora deste repo
 
-13 servidores com versão fixada e verificada, mais o gerador que escreve a
-configuração de cada CLI a partir de uma fonte só:
+Servidor MCP entra em **toda** chamada da API: os 9 que eu uso no Hermes são 104
+ferramentas carregadas em cada mensagem, e `playwright` + `chrome-devtools` sozinhos
+são 55 delas. Skill comprime a saída; MCP infla a entrada — por isso o kit é só
+skills + hooks.
 
-```bash
-python3 tools/gen-mcp-configs.py        # regenera mcp/generated/*
-python3 tools/gen-mcp-configs.py --list # tabela: servidor, pacote, versão, por quê
-```
-
-Sai config pronta para Claude (`.mcp.json`), Codex (`config.toml`), OpenCode
-(`opencode.json`), Hermes (`config.yaml`) e Prime Agent
-(`prime-agent mcp add`). Leia [mcp/README.md](mcp/README.md) antes: tem armadilha
-de nome de pacote (o npm `mcp-server-git` é placeholder de terceiro) e de
-permissão de token.
+O catálogo (13 servidores com versão conferida, o porquê de cada um, os nomes de
+pacote que são armadilha e o gerador de config por CLI) fica em
+`~/Documents/projects/docs-davi/mcp-catalogo/` — fora daqui, para não ser instalado
+junto. No Hermes os 9 continuam ativos, instalados à mão com `hermes mcp add`.
 
 ## Verificação
 
