@@ -856,7 +856,9 @@ def collect_verification(root, state, task, contract) -> dict:
         ev["worktree_clean"] = None
         return ev
     code, status = run(["git", "-C", str(worktree), "status", "--porcelain"])
-    ev["worktree_clean"] = (status.strip() == "") if code == 0 else None
+    # Route through scope_guard so generated output (__pycache__, node_modules, build dirs) does not
+    # read as dirty — two implementations of "clean" drifting apart is how a gate lies.
+    ev["worktree_clean"] = SG.worktree_clean(worktree) if code == 0 else None
     ev["commands"].append({"command": f"git -C {worktree} status --porcelain", "exit_code": code,
                            "output": status[:400]})
     if base:
@@ -1571,17 +1573,19 @@ def cmd_reconcile(a) -> int:
                     problems.append(f"TASK {tid}: worktree branch is {br!r}, state says {t['branch']!r}")
                 code, st = run(["git", "-C", str(wt), "status", "--porcelain",
                                 "--untracked-files=all"])
-                if code == 0 and st:
-                    problems.append(f"TASK {tid}: worktree has uncommitted changes ({len(st.splitlines())} paths)")
+                paths = []
+                for ln in (st or "").splitlines():
+                    chunk = ln[3:].strip()
+                    if " -> " in chunk:
+                        chunk = chunk.split(" -> ", 1)[1]
+                    if chunk:
+                        pn = chunk.strip('"')
+                        if not SG.matches_any(pn, SG.ALWAYS_IGNORED):   # generated output is not dirt
+                            paths.append(pn)
+                if code == 0 and paths:
+                    problems.append(f"TASK {tid}: worktree has uncommitted changes ({len(paths)} paths)")
                     contract = task_contract(t)
                     if contract:
-                        paths = []
-                        for ln in st.splitlines():
-                            chunk = ln[3:].strip()
-                            if " -> " in chunk:
-                                chunk = chunk.split(" -> ", 1)[1]
-                            if chunk:
-                                paths.append(chunk.strip('"'))
                         cls = SG.classify_paths(paths, contract)
                         if cls["violations"]:
                             problems.append(f"TASK {tid}: uncommitted SCOPE_VIOLATION "
