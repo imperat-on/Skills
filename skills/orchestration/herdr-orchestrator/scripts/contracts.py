@@ -32,7 +32,8 @@ VERDICTS = ["PASS", "FAIL"]
 FIELD_ORDER = [
     "task_id", "role", "objective", "depends_on", "write_scope", "read_scope", "forbidden_scope",
     "acceptance_criteria", "required_checks", "deliverables", "branch", "worktree", "base_commit",
-    "worker", "agent_kind", "mutation_policy", "when_blocked", "scope_justification",
+    "worker", "agent_kind", "model", "budget_tokens", "budget_usd", "mutation_policy",
+    "when_blocked", "scope_justification",
     "checkpoint_policy", "phase_plan", "notes",
 ]
 LIST_FIELDS = ["depends_on", "write_scope", "read_scope", "forbidden_scope", "acceptance_criteria",

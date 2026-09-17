@@ -1244,12 +1244,12 @@
    "tier": "extra",
    "license": "MIT",
    "author": "Davi Kolansinsky (imperat-on)",
-   "source": "local (skill pessoal, herdada de ~/.hermes/skills)",
-   "upstream_path": "/home/zes/.hermes/skills/autonomous-ai-agents/herdr-orchestrator/SKILL.md",
-   "upstream_sha256": "f76f98a3735238ee",
-   "bundled_sha256": "f76f98a3735238ee",
-   "lines": 793,
-   "files": 30
+   "source": "kit (canonico aqui; copia instalada em ~/.hermes/skills/autonomous-ai-agents/)",
+   "upstream_path": "/home/zes/Documents/projects/Skills/skills/orchestration/herdr-orchestrator/SKILL.md",
+   "upstream_sha256": "6595d8c13f5069f2",
+   "bundled_sha256": "6595d8c13f5069f2",
+   "lines": 945,
+   "files": 33
   },
   {
    "name": "langchain-architecture",

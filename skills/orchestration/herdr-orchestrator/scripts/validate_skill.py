@@ -48,11 +48,15 @@ REQUIRED_MODEL_TERMS = [
     "TASK_CONTRACT_INVALID", "result contract", "SCOPE: FAIL", "SCOPE: PASS",
     "scope_violation", "merge_gate", "ready: false", "checkpoint", "replacement",
     "watchdog", "stalled", "prevention", "detection",
+    # cost/conflict/reliability discipline (v1.4)
+    "budget_tokens", "max_parallel_workers", "cache-hit share", "overlap",
+    "merge train", "pass^k", "test artifacts",
 ]
 ORCH_COMMANDS = [
     "init", "set-modes", "modes", "propose", "add-task", "set-task", "contract", "result",
     "verify", "validate-scope", "merge-gate", "guard", "checkpoint", "replace-worker",
     "review-package", "events", "event", "ready", "status", "reconcile", "validate", "report",
+    "overlap",
 ]
 # Scripts that expose a CLI must answer --help with exit code 0.
 CLI_SCRIPTS = ["orch.py", "scope_guard.py", "watchdog.py"]

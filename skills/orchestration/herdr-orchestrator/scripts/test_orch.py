@@ -989,5 +989,39 @@ class TestRolePolicies(OrchTestCase):
         self.assertIn("temp/build/cache", contracts.ROLE_POLICIES["tester"]["write_zone"])
 
 
+class TestScopeOverlap(OrchTestCase):
+    """Invariant (v1.4): two live writers whose write scopes can match the same path are
+    refused before dispatch — collisions are caught at planning time, not at merge time."""
+
+    def test_prefix_collision_is_refused_with_exit_2(self):
+        self.init()
+        self.add_task("a", scope="src/app/**")
+        self.add_task("b", scope="src/app/foo.ts")     # a strict prefix of the other
+        r = self.orch("overlap")
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("OVERLAP: 1 COLLISION", r.stdout)
+        r = self.orch("overlap", "--json")
+        data = json.loads(r.stdout)
+        self.assertEqual(data["collisions"][0]["confidence"], "definite")
+        self.assertEqual(sorted(data["collisions"][0]["tasks"]), ["a", "b"])
+
+    def test_disjoint_scopes_are_clean(self):
+        self.init()
+        self.add_task("a", scope="src/app/**")
+        self.add_task("b", scope="src/db/**")
+        r = self.orch("overlap")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("OVERLAP: NONE", r.stdout)
+
+    def test_finished_tasks_do_not_count(self):
+        self.init()
+        self.add_task("a", scope="src/app/**")
+        self.add_task("b", scope="src/app/foo.ts")
+        self.orch("set-task", "--id", "a", "--status", "cancelled")
+        r = self.orch("overlap")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("OVERLAP: NONE", r.stdout)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

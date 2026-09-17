@@ -103,6 +103,60 @@ def matches_any(path: str, patterns) -> bool:
     return any(path_matches(path, p) for p in patterns)
 
 
+# ------------------------------------------------------------------- overlap (v1.4)
+# Collisions are authored during planning: two live writers whose scopes can match the
+# same path are a merge conflict on a timer. Catching it here costs nothing; catching it
+# at merge costs a whole task.
+
+CATCH_ALL = {"**", "**/*", "*", "./**", "./*"}
+
+
+def literal_prefix(pattern: str) -> str:
+    """The fixed part of a pattern before its first glob character (its directory lead)."""
+    p = normalize_pattern(pattern)
+    for i, ch in enumerate(p):
+        if ch in GLOB_CHARS:
+            return p[:i]
+    return p
+
+
+def scopes_overlap(a: str, b: str) -> tuple:
+    """(overlap, confidence) for two write-scope patterns; confidence: definite|possible|none.
+
+    Conservative on purpose: `possible` still requires a decision from the orchestrator
+    (serialise the tasks or record why the overlap is harmless).
+    """
+    pa, pb = normalize_pattern(a), normalize_pattern(b)
+    if pa == pb:
+        return True, "definite"
+    if pa in CATCH_ALL or pb in CATCH_ALL:
+        return True, "possible"
+    la, lb = literal_prefix(pa), literal_prefix(pb)
+    if not la or not lb:
+        return True, "possible"
+    if la.startswith(lb) or lb.startswith(la):
+        return True, "definite"
+    return False, "none"
+
+
+def pairwise_overlaps(tasks: list) -> list:
+    """Every colliding pair among the given tasks (each with task_id + write_scope)."""
+    collisions = []
+    for i, a in enumerate(tasks):
+        for b in tasks[i + 1:]:
+            for pa in (a.get("write_scope") or []):
+                for pb in (b.get("write_scope") or []):
+                    over, confidence = scopes_overlap(pa, pb)
+                    if over:
+                        collisions.append({
+                            "tasks": [a.get("task_id") or a.get("id"), b.get("task_id") or b.get("id")],
+                            "patterns": [pa, pb],
+                            "confidence": confidence,
+                        })
+    collisions.sort(key=lambda c: (c["confidence"] != "definite", c["tasks"]))
+    return collisions
+
+
 def classify_paths(paths, contract: dict) -> dict:
     """Split changed paths into allowed / unexpected / forbidden / ignored. Pure and deterministic."""
     write_scope = scope_patterns(contract, "write_scope")

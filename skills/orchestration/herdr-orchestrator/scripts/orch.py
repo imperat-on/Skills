@@ -551,7 +551,7 @@ CONTRACT_FLAG_FIELDS = {
     "required_check": "required_checks", "deliverable": "deliverables", "when_blocked": "when_blocked",
     "mutation_policy": "mutation_policy", "checkpoint_policy": "checkpoint_policy",
     "phase_plan": "phase_plan", "agent_kind": "agent_kind", "scope_justification": "scope_justification",
-    "note": "notes",
+    "note": "notes", "model": "model", "budget_tokens": "budget_tokens", "budget_usd": "budget_usd",
 }
 
 
@@ -996,6 +996,56 @@ def compute_gate(root, state, task, *, live: bool) -> dict:
     task["merge_gate"] = gate
     task["updated_at"] = now()
     return gate
+
+
+# ------------------------------------------------------------------- overlap (v1.4)
+# Two live writers whose write scopes can match the same path are a merge conflict on a
+# timer. Refuse (or serialise) before dispatch: exit 2 means "collision, do not dispatch".
+
+TERMINAL_STATUSES = {"integrated", "cancelled"}
+
+
+def _live_scope(d: Path, task: dict) -> list:
+    """The scope a live task is actually writing: its contract's, else the plan's estimate."""
+    cpath = d / "contracts" / f"{task['id']}.json"
+    if cpath.exists():
+        try:
+            scope = json.loads(cpath.read_text(encoding="utf-8")).get("write_scope")
+        except (OSError, ValueError):
+            scope = None
+        if scope:
+            return list(scope)
+    return list(task.get("expected_scope") or [])
+
+
+def cmd_overlap(a) -> int:
+    root = Path(a.repo_root).expanduser().resolve()
+    d, state, tasks = load(root)
+    live = []
+    for t in tasks["tasks"]:
+        if t["status"] in TERMINAL_STATUSES:
+            continue
+        scope = _live_scope(d, t)
+        if scope:
+            live.append({"task_id": t["id"], "status": t["status"], "write_scope": scope})
+    collisions = SG.pairwise_overlaps(live)
+    if a.json:
+        print(json.dumps({
+            "live_tasks": live,
+            "collisions": collisions,
+            "definite": [c for c in collisions if c["confidence"] == "definite"],
+        }, indent=2))
+    else:
+        for c in collisions:
+            print(f"COLLISION ({c['confidence']}): {c['tasks'][0]} vs {c['tasks'][1]}"
+                  f"  ->  {c['patterns'][0]} / {c['patterns'][1]}")
+        print("OVERLAP: NONE" if not collisions else f"OVERLAP: {len(collisions)} COLLISION(S)")
+    if collisions:
+        log_event(root, "scope_overlap_detected", count=len(collisions),
+                  pairs=[c["tasks"] for c in collisions],
+                  definite=sum(1 for c in collisions if c["confidence"] == "definite"))
+        return 2
+    return 0
 
 
 def cmd_merge_gate(a) -> int:
@@ -1985,6 +2035,9 @@ def main() -> int:
     s.add_argument("--base-commit")
     s.add_argument("--branch")
     s.add_argument("--worktree")
+    s.add_argument("--model", help="pinned model for this task (never inherited from the session)")
+    s.add_argument("--budget-tokens", help="hard token ceiling for this task")
+    s.add_argument("--budget-usd", help="hard cost ceiling for this task")
     s.add_argument("--force", action="store_true", help="allow a material contract change")
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_contract)
@@ -2017,6 +2070,11 @@ def main() -> int:
     s.add_argument("--no-store", dest="store", action="store_false", default=True)
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_validate_scope)
+
+    s = sub.add_parser("overlap", help="refuse live tasks whose write scopes collide "
+                                       "(exit 2 = collision, do not dispatch)")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_overlap)
 
     s = sub.add_parser("merge-gate")
     s.add_argument("--id", required=True)

@@ -1,7 +1,7 @@
 ---
 name: herdr-orchestrator
 description: "Orchestrate parallel agent teams in Herdr with review."
-version: 1.3.0
+version: 1.4.0
 author: Davi Kolansinsky (imperat-on), Hermes Agent
 license: MIT
 platforms: [linux, macos]
@@ -10,7 +10,8 @@ metadata:
     tags: [orchestration, herdr, multi-agent, worktrees, review, recovery, delegation,
            coordination-modes, team-composition, worker-autonomy, task-contracts,
            scope-enforcement, checkpoints, watchdog, merge-gate, resume,
-           productivity-signals, engine-escalation]
+           productivity-signals, engine-escalation, fan-out-gate, budget, model-routing,
+           cache-efficiency, conflict-free, provable-done, merge-train]
     related_skills: [herdr-pane-agents, hermes-agent, requesting-code-review]
 ---
 
@@ -120,7 +121,41 @@ Don't use for:
 36. **A field-level contract call merges; only `--file` replaces.** Fields the call does not mention
     keep their stored value, so a later `--force --depends-on x` cannot silently erase the objective,
     the acceptance criteria or the required checks a reviewer is judging against.
-37. **Another orchestrator in the same repository is a stop-and-ask.** Before the first mutating
+37. **Fan-out is gated, never reflex.** Parallelise only genuinely independent work whose value
+    justifies roughly an order of magnitude more tokens — coding parallelises less than it looks.
+    Cap concurrent workers (`max_parallel_workers`, default 3) and delegation depth (1 unless a
+    recorded reason says otherwise); require a stated reason to exceed either. `references/budget-and-routing.md`
+38. **No two live writers share a path.** Before dispatch, refuse any task whose `write_scope`
+    intersects a live or ready task's (`orch.py overlap`), and apply the decomposition ladder first:
+    partition by ownership (one owner per file) -> contract-first interfaces for cross-domain work ->
+    serialise only the genuinely fused case. Overlap caught at task-creation is free; at merge it is not.
+39. **Every dispatch carries a budget and a pinned model.** `budget_tokens`/`budget_usd` and the model
+    belong to the task. Over budget means stop, checkpoint and escalate — never "one more attempt".
+    Never inherit the model, never swap it mid-run: a mid-run swap discards the prompt cache.
+40. **Keep the cache hot per worker.** One byte-stable prefix (tools -> system -> messages),
+    append-only turns, identical tool schemas across a wave, waves dispatched inside the cache TTL.
+    Compaction is a wave boundary, not a mid-flight action. Report the cache-hit share per run.
+41. **Done is proved by you, not asserted by the worker.** Re-execute the required checks yourself in
+    a clean checkout at the recorded commit; a claim needs command + exit code + artifact. Where the
+    check names tests, require the red->green flip and no previously-green test turning red.
+42. **Test artifacts are immutable to the worker.** Any hunk under test artifacts (test paths, fixtures, CI config)
+    is quarantined, restored from `base_commit` and re-run; a legitimate test change is an explicit
+    escalation with the hunk shown, never a silent acceptance.
+43. **Review is independent and unanchored.** Different model family/harness than the producer; the
+    reviewer gets the contract, the diff and the captured evidence — never the producer's narrative —
+    and findings cite `file:line` plus the diff hunk. Style findings are optional, and a review that
+    reports nothing names what it checked.
+44. **Fix loops need a reproducing failure and a cap.** No fix without evidence of the failure first,
+    `max_fix_cycles` bounded, the full suite re-run every cycle, escalation when the budget is spent
+    or the disagreement unresolved — a blind repair loop damages correct code.
+45. **Integrate the combination, not the branch.** After every integration, re-run the required checks
+    on the merged result; when several gated branches are ready, batch them onto a scratch integration
+    ref, run once and bisect on failure. A branch that passed alone proves nothing about the
+    repository it merges into.
+46. **Reliability beats a lucky green.** For flaky or high-risk work require repeated success (n > 1)
+    before the merge gate can be ready, and escalate items where independent verifications disagree
+    instead of averaging them away.
+47. **Another orchestrator in the same repository is a stop-and-ask.** Before the first mutating
     dispatch, check for foreign sessions (`git branch --list 'ao/*'`, worktrees registered under
     another tool's data dir, a second orchestrator process). Two orchestrators on one repository
     duplicate work: measured once, the same hub/navigation fix was produced twice in parallel.
@@ -280,6 +315,52 @@ You may read git state, metadata, diffs, reports, test results and the files ver
 do **not** need to carry the whole project in your context to coordinate - that is intentional. Use
 `orch.py verify` / `validate-scope` / `merge-gate` / `review-package` for compact, machine-checkable
 answers, and load a diff body only when a verdict is genuinely ambiguous.
+
+## Fan-out gate and budget
+
+Before dispatching anything in parallel, answer three questions and record the answers: are the
+tasks genuinely independent, is the value worth ~10x the tokens of doing it serially, and are the
+`write_scope`s disjoint? If any answer is no, stay single-agent. The measured reality behind the
+gate: multi-agent systems cost ~15x chat tokens, an independent fan-out measurement found 2.6-5.9x
+input tokens with no speed gain, and the largest overspend incidents in the wild are unbounded
+verifier fan-outs (41, then 102, then 415 agents for one review step).
+
+Every task carries a **model** (pinned, never inherited) and a **budget** (`budget_tokens` /
+`budget_usd`). The ladder — cheap for mechanical work, mid for single-file features, top for
+planning, hard debugging and review — spans roughly 50x in input price, so the rung is the single
+biggest cost lever. Cache discipline is the second: one byte-stable prefix per worker, append-only
+turns, waves dispatched together inside the TTL, no mid-run model swaps, and the cache-hit share
+reported as a budget line. Steer on **cost per accepted change**, not cost per token.
+
+Mechanics, prices, the ladder table, cache rules, handoff payload rules and the run metrics block:
+`references/budget-and-routing.md`. Track it per run with the metrics block there; a run that cannot
+report its own numbers cannot be improved.
+
+## Conflict-free decomposition and integration
+
+Overlap is authored during planning, so fix it there — in this order:
+
+```text
+1. partition by ownership   one owner per file; shared files get a change-request protocol
+2. contract-first           interfaces/contract files owned by the lead, read-only for workers
+3. vertical slices          never "one agent per layer" (maximises file overlap)
+4. reservations             flock-style locks on hot shared files (manifests, migrations, barrels)
+5. serialise the fused case only — the last rung, not the first
+```
+
+Parallel limits: 2-4 workers when you absorb the status chatter, 3-5 documented as the per-human
+sweet spot, 8 as the ceiling in a 194-task reference run, and roughly 2 CLI sessions before a 16 GB
+workstation feels memory pressure. A branch lives at most a couple of days; leftovers re-dispatch on
+a fresh branch. Ports, databases and `.env` files are isolated per worktree exactly like files.
+
+Integration validates the **combination**: after each merge, re-run the required checks on the merged
+result (merge trains and bors exist because per-branch validation is insufficient), batch ready
+branches onto a scratch integration ref when there are several, and treat a textually clean merge as
+proof of nothing — `rerere` replays text, not semantics. Dependent tasks become a **stack**
+(`gh stack`, `git-machete`, or jj's first-class conflicts) instead of a serialised run.
+
+Numbers, sources, the tooling landscape and the worktree hygiene gotchas:
+`references/conflict-free-parallelism.md`.
 
 ## Task contracts
 
@@ -473,7 +554,10 @@ keep the plan only in context.
    `worktree_required`. Statuses: pending, ready, dispatched, working, blocked, review, failed,
    needs_fix, passed, integrated, cancelled. A task is `ready` only when all dependencies are
    satisfied **and** (if mutating) its contract is valid. Criterion: every task has at least one
-   measurable acceptance criterion, a declared scope and — once it is mutating — a validated contract.
+ measurable acceptance criterion, a declared scope and — once it is mutating — a validated contract;
+ every mutating task has a `write_scope` that was checked for overlap against the live/ready tasks
+ (`orch.py overlap`, refused or serialised), a pinned model and a budget, and the concurrent-worker
+ cap is recorded.
 3. **Contract** — write the structured contract per mutating task (`contract --id <task> ...`), with
    `base_commit` resolved from git, and let validation refuse anything incomplete
    (`TASK_CONTRACT_INVALID`). Criterion: each dispatchable task has a valid contract, a recorded
@@ -501,7 +585,9 @@ keep the plan only in context.
    prompt (`references/prompts.md`, carrying the rendered contract) **without** `--wait`, for every
    ready task in a row. Launch each worker in the resolved execution mode, using the invocation
    discovered for that kind (`references/worker-execution-modes.md`), and verify the observed argv
-   with `herdr pane process-info`; record it in state. Under `assisted`, ask before starting the team;
+   with `herdr pane process-info`; record it in state. Pin each worker's model explicitly (never let
+   it inherit the session's), pass its budget in the prompt, and start the whole wave together so the
+   shared prefix is cached once. Under `assisted`, ask before starting the team;
    under `supervised_auto`/`auto`, proceed and report at the next checkpoint.
    Criterion: every dispatched task shows agent + pane + worktree + verified cwd/branch + launch mode +
    contract digest in state, and all prompts were submitted before the first wait.
@@ -535,9 +621,12 @@ keep the plan only in context.
     re-checks the gate). Inspect merge output and status after every merge and run relevant tests.
     **On conflict: stop, record, inspect the affected files, present it to the user.** Under `assisted`,
     ask before each merge; under `supervised_auto`/`auto`, merge and report it.
+    After each merge, **re-run the required checks on the merged result** before trusting it (a
+    per-branch pass proves nothing about the combination); with several gated branches ready, batch
+    them onto a scratch integration ref, validate once and bisect on failure.
     Criterion: every accepted branch is merged, each worker commit is reachable
-    (`git merge-base --is-ancestor <worker-commit> HEAD`), and no integration happened with a gate that
-    was not ready.
+    (`git merge-base --is-ancestor <worker-commit> HEAD`), the checks were re-run on the merged result,
+    and no integration happened with a gate that was not ready.
 11. **Validate, persist, clean, report** — run project validation (tests, lint, typecheck, build,
     smoke, security checks as applicable) on the integration branch; set the run status
     success/partial/failed; clean up only owned resources; deliver the final report. Under `assisted`,
@@ -577,6 +666,7 @@ python3 scripts/orch.py contract --id <task> ...            # write/validate/sho
 python3 scripts/orch.py result --id <task> --file <path>    # collect the result contract
 python3 scripts/orch.py verify --id <task>                  # git + scope verification, recorded
 python3 scripts/orch.py validate-scope --id <task> --json   # SCOPE: PASS/FAIL, machine-readable
+python3 scripts/orch.py overlap [--json]                    # do two live write scopes collide?
 python3 scripts/orch.py merge-gate --id <task> --live       # ready: true/false
 python3 scripts/orch.py guard --id <task> --install-hook --plan --verify-launch
 python3 scripts/orch.py resume --id <task> [--recreate]   # rebuild a vanished worktree from branch
@@ -695,6 +785,31 @@ state files are hints. Details: `references/state-and-recovery.md`.
   the whole contract: check the dropped-field warning on stderr before trusting it.
 - **Silently editing this skill mid-run.** Lessons go to `.orchestrator/skill-proposals.md` via
   `orch.py propose`; the skill changes only on an explicit request.
+- **Fan-out as a reflex.** Parallelism costs ~10x tokens and measured fan-outs were *not* faster;
+  asking "is this genuinely independent and worth 10x?" before every dispatch is the cheapest rule here.
+- **An unbounded verifier fan-out.** One review step recruiting 41 verifiers (then 102, then 415) is
+  the documented way a run drains its budget. Cap breadth and depth; a verifier per finding is not a
+  policy, it is a leak.
+- **Two writers on one file.** Ownership is settled in the plan, not discovered at merge: one owner
+  per file, change requests routed to the owner, interfaces read-only for everyone else.
+- **Inheriting the model.** A worker without an explicit model runs on whatever the session drives —
+  the classic 50x cost surprise.
+- **Swapping the model mid-run to save money.** It discards the prompt cache, and the cache is worth
+  up to 10x on input.
+- **Letting a wave outlive the cache TTL.** Dispatch waves together; a 10-minute gap can re-prime the
+  whole prefix at full price.
+- **Merging a branch that only passed alone.** Two branches can each pass their own tests and break
+  the trunk together. Re-run the checks on the merged result.
+- **Accepting a test edit as part of a fix.** Relaxed assertions and deleted tests are how green is
+  manufactured; quarantine test-path hunks and re-grade from the base commit.
+- **Treating coverage as evidence.** Coverage measures execution, not verification; mutation score
+  correlates with real-fault detection and coverage does not.
+- **A single green run as proof.** Agents solve the same task inconsistently (pass^8 <25% in measured
+  benchmarks): repeat the check or record `n=1` honestly.
+- **Handing the reviewer the producer's narrative.** Reviewer prompts are injectable by producer-written
+  metadata; give the contract, the diff and the evidence, and require `file:line` findings.
+- **A fix loop without a reproducing failure.** Blind repair damages correct code; require the failing
+  evidence first and cap the cycles.
 
 ## Verification
 
@@ -742,6 +857,30 @@ The skill is working when this scenario completes with real evidence:
     `prevention: none` with the reason, and no worker is launched with that environment.
 26. The bootstrap checked the repository for a foreign orchestrator (`ao/*` branches, another tool's
     worktrees, a second orchestrator process) before the first mutating dispatch.
+27. Two planned tasks with overlapping `write_scope` were refused or serialised *before* dispatch, and
+    the overlap check ran again before each later wave.
+28. Every dispatched task records a pinned model and a budget; a task that hit its budget stopped,
+    checkpointed and escalated instead of getting "one more attempt".
+29. The run reports its cache-hit share, and no model was swapped mid-run.
+30. The orchestrator re-executed the required checks itself at the recorded commit, and the recorded
+    evidence carries the command and its exit code (not a worker's assertion).
+31. A test-path edit was quarantined and escalated, or explicitly waived with the reason recorded.
+32. The reviewer received only the contract, the diff and the evidence, and its findings cite
+    `file:line` plus the diff hunk.
+33. After the first integration, the required checks were re-run on the merged result (and batched
+    when several branches were ready).
+34. The report carries the run metrics (tokens, cache share, model per task, dispatches per accepted
+    task, review-fail rate, cost per accepted change), and the retro produced proposals rather than
+    silent skill edits.
+
+12. **Retro and metrics** — collect the run metrics block (`references/budget-and-routing.md`):
+    tokens in/out, cache-hit share, model per task, wall time, dispatches per accepted task,
+    review-fail rate, fix cycles used, spin events, replacements, escalations, budget used vs cap and
+    cost per accepted change. Write the numbers into the report, and turn every surprise into a
+    proposal (`orch.py propose`) instead of editing this skill. A run that cannot report its own
+    numbers cannot be improved, and the next plan is priced from these.
+    Criterion: the metrics are in `reports/`, the proposals file is updated, and the user's report
+    states cost per accepted change.
 
 If any of those steps cannot be evidenced with real output, the run is not complete.
 
@@ -770,6 +909,20 @@ If any of those steps cannot be evidenced with real output, the run is not compl
   procedure and its guardrails.
 - `references/quality-and-integration.md` — testing stage, contract-driven reviewer independence, fix
   loop, merge gate, integration, final validation, cleanup, cancellation, pause/resume, completion.
+- `references/conflict-free-parallelism.md` — decomposition that avoids conflicts by construction
+  (ownership, contract-first, vertical slices, reservations), measured conflict rates and parallel
+  limits, integration as a merge train, stacked branches for dependent work, worktree hygiene, and the
+  tooling landscape (claude-squad, vibe-kanban, container-use, dmux, worktrunk, Codex cloud, Devin,
+  HumanLayer, Orca, AgentAPI, OpenHands) with what to copy from each.
+- `references/provable-done.md` — why the producer's word is not evidence (measured false-completion
+  rates, judge AUROC, self-correction limits), orchestrator-captured evidence, clean-room
+  re-execution, differential and immutable test gates, review independence and bias mitigations
+  (position, self-preference, anchoring, injection), property/metamorphic/mutation gates, fix-loop
+  guardrails, pass^k reliability and contamination probes.
+- `references/budget-and-routing.md` — the fan-out gate with its measured numbers, the model ladder
+  (pinned per task, never inherited), prompt-cache economics and cache-aware dispatch rules, handoff
+  payload rules, budget enforcement mechanics with anchors, cost per accepted outcome, and the run
+  metrics block.
 - `references/prompts.md` — delegation (contract-based), research, review package, fix, checkpoint,
   replacement, recovery and report templates.
 - `references/state-and-recovery.md` — state.json / tasks.json / events.jsonl schemas (v1 -> v3), atomic
