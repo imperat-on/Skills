@@ -614,8 +614,13 @@ class TestScopeEnforcement(OrchTestCase):
         payload = json.loads(v.stdout)["launch_verification"]
         self.assertEqual(payload["cases"], {"outside": 2, "inside": 0},
                          f"o hook tem que bloquear fora e passar dentro: {payload}")
-        self.assertFalse(payload["verified"], "sem o hook registrado nao da' para dizer verified")
-        self.assertTrue(any("not registered" in x for x in payload["reasons"]), payload["reasons"])
+        # o veredito depende do registro na CLI: com o hook registrado e' verified=True; sem ele,
+        # tem que vir False com a razao exata (nada de alegar fronteira que nao esta em vigor)
+        if payload.get("registered"):
+            self.assertTrue(payload["verified"], payload["reasons"])
+        else:
+            self.assertFalse(payload["verified"])
+            self.assertTrue(any("not registered" in x for x in payload["reasons"]), payload["reasons"])
 
     def test_unsupported_kinds_are_labelled_not_silently_covered(self):
         """Decisao do usuario: o alvo de run e' opencode, claude e hermes. O resto nao pode sair
