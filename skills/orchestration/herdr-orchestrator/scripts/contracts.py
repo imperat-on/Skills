@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 
 CONTRACT_VERSION = 1
 CHECKPOINT_VERSION = 1
@@ -619,3 +620,40 @@ PATTERN_KEYS_RE = re.compile(r"^(write_scope|forbidden_scope|read_scope)$")
 
 def scope_patterns(contract: dict, key: str) -> list:
     return [str(p) for p in (contract.get(key) or []) if str(p).strip()]
+
+
+# --------------------------------------------------------------------------- checkpoints
+
+CHECKPOINT_IN_WORKTREE = ".checkpoint.json"
+
+
+def checkpoint_candidates(root, task_id: str, worktree=None) -> list:
+    """Every place a task's checkpoint may live, best-known first.
+
+    Two locations on purpose: the run's own directory (`checkpoints/<task>.json`) is what the
+    orchestrator seeds and syncs, and `<worktree>/.checkpoint.json` is the path a worker can write
+    without any external-directory rule — writing outside the worktree turned out to be fragile in
+    three separate ways in live runs (an approval dialog, a missing parent directory, and a relative
+    path full of `..` that the permission matcher does not resolve).
+    """
+    out = []
+    if root:
+        out.append(Path(root) / ".orchestrator" / "checkpoints" / f"{task_id}.json")
+    if worktree:
+        out.append(Path(worktree) / CHECKPOINT_IN_WORKTREE)
+    return out
+
+
+def newest_checkpoint(root, task_id: str, worktree=None):
+    """(path, mtime) of the most recently written checkpoint, or None."""
+    best = None
+    for path in checkpoint_candidates(root, task_id, worktree):
+        try:
+            if path.is_file():
+                ts = path.stat().st_mtime
+                if best is None or ts > best[1]:
+                    best = (path, ts)
+        except OSError:
+            continue
+    return best
+

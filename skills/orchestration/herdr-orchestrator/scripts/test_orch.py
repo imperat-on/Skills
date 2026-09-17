@@ -592,6 +592,23 @@ class TestScopeEnforcement(OrchTestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("backend/auth.ts", r.stdout)
 
+    def test_checkpoint_written_inside_the_worktree_is_found(self):
+        """O caminho confiavel para o worker e DENTRO do worktree: um worker ao vivo foi negado
+        escrevendo fora dele com `.../src/calc.py/../../../../../checkpoints/x.json` (caminho
+        relativo com `..` que o matcher de permissao nao resolve). O orquestrador le os dois."""
+        self.init()
+        wt, branch, commit = self.prepare_task("a")
+        (Path(wt) / ".checkpoint.json").write_text(json.dumps({
+            "task_id": "a", "phase": 2, "current": "implementado no worktree",
+            "remaining": ["testes"], "last_known_commit": commit}), encoding="utf-8")
+        r = self.orch("checkpoint", "--id", "a", "--show", "--json")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("implementado no worktree", r.stdout)
+        r2 = self.orch("resume", "--id", "a")
+        self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
+        self.assertIn("checkpoint:", r2.stdout)
+        self.assertIn(".checkpoint.json", r2.stdout)
+
     @unittest.skipUnless(shutil.which("opencode"), "opencode CLI not installed")
     def test_project_config_lands_in_the_worktree_even_when_the_contract_lacks_it(self):
         """O contrato do drill ao vivo nao tinha `worktree` (foi registrado depois com set-task) e
@@ -610,7 +627,9 @@ class TestScopeEnforcement(OrchTestCase):
         self.assertEqual(plan["project_config"], str(wt / ".opencode" / "opencode.json"))
         v = self.orch("guard", "--id", "a", "--verify-launch", "--cwd", str(wt))
         self.assertEqual(v.returncode, 0, v.stdout + v.stderr)
-        self.assertTrue(json.loads(v.stdout)["launch_verification"]["project_config_verified"])
+        vv = json.loads(v.stdout)["launch_verification"]
+        self.assertTrue(vv["verified"], vv["reasons"])
+        self.assertEqual(vv["project_config"], str(wt / ".opencode" / "opencode.json"))
         self.assertEqual(subprocess.run(["git", "-C", str(wt), "status", "--porcelain"],
                                         capture_output=True, text=True).stdout.strip(), "")
 
@@ -628,7 +647,6 @@ class TestScopeEnforcement(OrchTestCase):
         self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
         v = json.loads(r2.stdout)["launch_verification"]
         self.assertTrue(v["verified"], v["reasons"])
-        self.assertTrue(v["project_config_verified"], v)
         self.assertTrue(v["project_config"].endswith(".opencode/opencode.json"))
         self.assertEqual(v["observed"]["edit"]["*"], "deny")
         self.assertEqual(v["observed"]["bash"]["*"], "deny")
@@ -649,12 +667,17 @@ class TestScopeEnforcement(OrchTestCase):
         import sys as _sys
         _sys.path.insert(0, str(Path(__file__).resolve().parent))
         import scope_guard as sg
-        env_var = sg.KIND_ADAPTERS["opencode"]["env_var"]
-        env_value = plan["launch_env"][env_var]
-        self.assertTrue(Path(env_value).is_file(), f"o env aponta para um arquivo gerado: {env_value}")
+        # o mecanismo e o ARQUIVO DE PROJETO no worktree; o arquivo de permissao fora dele fica
+        # em disco so para auditoria (nenhum env e exportado: medido que o env quebra os padroes)
+        self.assertEqual(plan["launch_env"], {})
+        self.assertEqual(plan["launch_env_export"], [])
+        self.assertTrue(Path(plan["permission_file"]).is_file(), plan["permission_file"])
         self.assertTrue(any("bash" in lim for lim in plan["limitations"]), plan["limitations"])
         # o plano é PERSISTIDO (o run de 2026-09-17 não tinha arquivo nenhum em disco)
         self.assertTrue((self.root / ".orchestrator" / "guards" / "a" / "prevention-plan.json").is_file())
+        # e o DIRETORIO de checkpoints existe: sem ele a escrita do worker vira pedido de permissao
+        # (o acesso ao dir cai no external_directory deny; a regra /** so cobre o conteudo)
+        self.assertTrue((self.root / ".orchestrator" / "checkpoints").is_dir())
         # um caminho sem glob vale nas DUAS leituras: arquivo e diretório
         permission = sg.opencode_permission({"task_id": "a", "write_scope": ["src/app/**", "src/stats.py"],
                                             "forbidden_scope": ["backend/**", "tests/x.py"]})
@@ -672,9 +695,9 @@ class TestScopeEnforcement(OrchTestCase):
         # negado, o worker para num dialogo "Access external directory" e o checkpoint nunca
         # aparece (achado de drill ao vivo). O ARQUIVO GERADO pelo plano tem que liberar esse
         # diretorio — e nada mais fora do escopo, tasks.json inclusive.
-        generated = json.loads(Path(plan["launch_env"][env_var]).read_text(encoding="utf-8"))["permission"]
-        orch = sg.orchestrator_dir(Path(plan["launch_env"][env_var]).parent)
-        ck_glob = str(Path(orch) / "checkpoints" / "*")
+        generated = json.loads(Path(plan["permission_file"]).read_text(encoding="utf-8"))["permission"]
+        orch = sg.orchestrator_dir(Path(plan["permission_file"]).parent)
+        ck_glob = str(Path(orch) / "checkpoints" / "**")   # a doc e o teste ao vivo usam **
         self.assertEqual(generated["edit"][ck_glob], "allow")
         self.assertEqual(generated["external_directory"][ck_glob], "allow")
         self.assertEqual(generated["external_directory"]["*"], "deny")

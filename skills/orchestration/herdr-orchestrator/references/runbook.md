@@ -56,8 +56,10 @@ python3 $O --repo-root <repo> guard --id <t> --install-hook --kind opencode --pl
   worktree's gitdir, and `launch_verification.verified: true` with `reasons: []`. Anything else means
   the worker runs with detection only — say so out loud instead of assuming prevention.
 - For opencode 1.18.31 the verified mechanism is the generated file exported as
-  `OPENCODE_CONFIG=<...>/guards/<t>/opencode-permission.json` (edit + external_directory + bash all
-  deny-by-default). `OPENCODE_PERMISSION`, `OPENCODE_CONFIG_CONTENT` and a project config do nothing.
+  `<worktree>/.opencode/opencode.json` (edit + bash deny-by-default, checkpoint directory allowed).
+  Do NOT export `OPENCODE_CONFIG` at it from outside the project: measured, that breaks the matching
+  of relative `edit` patterns and refuses even the scoped file. `OPENCODE_PERMISSION` and
+  `OPENCODE_CONFIG_CONTENT` are inert.
 
 ## 3. Dispatch (no `--wait`; target by pane)
 
@@ -82,21 +84,23 @@ herdr agent prompt $PANE "<contract rendered + steps + the result-report format>
       contract --id <t> --show | awk '/acceptance_criteria/{getline; gsub(/^ *- */,""); print}')" \
     --commit "$(git -C <wt> rev-parse HEAD)"
   ```
-  The worker updates the same file as it progresses; the watchdog flags `checkpoint_missing` when it
-  does not (`checkpoint_after`, default 600s).
+  Tell the worker to update **`<worktree>/.checkpoint.json`** (a relative path inside its own
+  worktree — allowed by the same config, excluded from git status); the orchestrator reads the newest
+  of that file and the seeded copy. The watchdog flags `checkpoint_missing` when neither is updated
+  (`checkpoint_after`, default 600s).
 - Dispatch the whole wave before waiting on any of it.
 
-**Launch with the mechanism's env in the worker's process.** A generated permission file that
-nothing exports is decoration; `herdr agent start` takes no `--env`. Put the export in the pane
-*before* starting the agent, then confirm it landed in the process itself:
+**The boundary travels in the project config — export nothing.** The mechanism is
+`<worktree>/.opencode/opencode.json`, written by `guard --plan`, read by opencode from the worker's
+own cwd. Measured the hard way: `OPENCODE_CONFIG` pointing at a file **outside** the project makes
+opencode stop matching the relative `edit` patterns, so the scope allow never lands and even in-scope
+writes are refused (three live variants, all denied). So: no env var, no `pane run` export, no
+wrapper. Prove it with the probe, which runs `opencode debug config` in the worktree with the env
+unset:
 
 ```bash
-herdr pane run $PANE "export OPENCODE_CONFIG=$(python3 -c \
-  'import json,sys;print(json.load(open(sys.argv[1]))["launch_env"]["OPENCODE_CONFIG"])' <plan-file>)"
-herdr agent start w-<t> --kind opencode --pane $PANE --timeout 120000
-PID=$(for p in $(pgrep -f '^opencode$|/opencode'); do \
-      [ "$(readlink -f /proc/$p/cwd 2>/dev/null)" = "<wt>" ] && echo $p; done | head -1)
-tr '\0' '\n' < /proc/$PID/environ | grep OPENCODE_CONFIG     # the worker must see it
+python3 $O --repo-root <repo> guard --id <t> --plan --verify-launch --cwd <wt>   # verified: true
+git -C <wt> status --porcelain          # must be empty: the config is in the worktree's exclude
 ```
 
 ## 4. Monitor mechanically

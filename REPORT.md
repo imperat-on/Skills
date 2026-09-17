@@ -258,16 +258,17 @@ Prevenção (opencode 1.18.31, medida com `opencode debug config` e `opencode ru
 | 1 | `OPENCODE_PERMISSION` (env) | **inerte** — a config efetiva vem vazia |
 | 2 | `OPENCODE_CONFIG_CONTENT` (env) | **inerte** |
 | 3 | `.opencode/opencode.json` do projeto | **vale** (lido do cwd do worker) |
-| 4 | `OPENCODE_CONFIG=<arquivo>` (env) | **vale** — mas só se exportado no pane antes do `agent start`; provado em `/proc/<pid>/environ` |
+| 4 | `OPENCODE_CONFIG=<arquivo fora do projeto>` (env) | **nocivo** — o allow do escopo nunca casa: o opencode para de casar os padrões relativos de `edit` e nega até o arquivo do escopo (3 variantes ao vivo, todas negadas). Nada é exportado; o arquivo gerado fica só para auditoria |
 | 5 | fronteira só de `edit` | **furada** — worker negado no Edit escreveu com `echo >>` |
 | 6 | `edit` + `bash` deny-by-default, com git e a checagem do contrato liberados | segura o caminho legítimo e barra o shell |
 | 7 | `src/x.py` (arquivo único) no mapa de permissão | **bug pego ao vivo**: virava `src/x.py/**` e nunca casava; o worker era negado no próprio arquivo e ia buscar outra porta |
 
 Composição (o que o drill provou que precisa estar verdadeiro, não só gerado):
-`<worktree>/.opencode/opencode.json` escrito pelo guard e em força sem env nenhum
-(`project_config_verified`), `OPENCODE_CONFIG` exportado no pane (`herdr pane run`)
-e conferido no processo, diretório de checkpoints liberado só para escrita do
-checkpoint, e `.opencode/` no `info/exclude` do worktree (o status fica limpo).
+`<worktree>/.opencode/opencode.json` escrito pelo guard e em força **sem env nenhum** (o
+probe roda `opencode debug config` no worktree sem as variáveis), diretório de
+checkpoints liberado na config com padrão `**` (o worker escreve o checkpoint fora do
+worktree — provado ao vivo), e `.opencode/` no `info/exclude` do worktree (o status fica
+limpo logo após o guard). Mecanismo único: o arquivo de projeto.
 
 Recuperação: `kill -9` no worker → watchdog classifica `agent_gone` → `resume`
 reconstrói branch/worktree/commits/critérios → `replace-worker` entrega o pacote

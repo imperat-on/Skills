@@ -46,7 +46,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from contracts import normalize_contract  # noqa: E402
+from contracts import newest_checkpoint, normalize_contract  # noqa: E402
 from events import log_event, read_events  # noqa: E402
 
 try:  # scope classification reuses the single scope implementation
@@ -262,12 +262,10 @@ def last_commit_ts(worktree: Path) -> float | None:
     return float(out.strip())
 
 
-def checkpoint_ts(root: Path, task_id: str) -> float | None:
-    path = root / ".orchestrator" / "checkpoints" / f"{task_id}.json"
-    try:
-        return path.stat().st_mtime
-    except OSError:
-        return None
+def checkpoint_ts(root: Path, task_id: str, worktree=None) -> float | None:
+    """Newest of the run's checkpoint and the one inside the worktree (see contracts.checkpoint)."""
+    found = newest_checkpoint(root, task_id, worktree)
+    return found[1] if found else None
 
 
 def worktree_path_mtime(path: Path) -> float | None:
@@ -354,7 +352,7 @@ def sample_task(root: Path, task: dict, snap: dict, prev: dict | None, *, use_he
         write_floor = started
     signals["last_write_ts"] = signals.get("last_write_ts") or iso(write_floor)
     out["seconds_since_write"] = int(now_ts() - write_floor) if write_floor else None
-    cts = checkpoint_ts(root, tid)
+    cts = checkpoint_ts(root, tid, worktree=worktree)
     signals["checkpoint_ts"] = iso(cts)
     if cts:
         activity.append(cts)

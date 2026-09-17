@@ -621,7 +621,9 @@ def cmd_resume(a) -> int:
         "recreated": recreated,
         "commits": commits,
         "changed_files": changed,
-        "checkpoint": task.get("checkpoint"),
+        "checkpoint": (lambda found: (dict(read_json(found[0]), path=str(found[0])) if found
+                                      else task.get("checkpoint")))(
+            C.newest_checkpoint(root, a.id, str(path))),
         "acceptance": contract.get("acceptance_criteria") or task.get("acceptance") or [],
         "write_scope": contract.get("write_scope") or [],
         "advisory": ("reconstructed from Git reality: hand this package to the next worker; never "
@@ -1136,6 +1138,9 @@ def cmd_checkpoint(a) -> int:
     if task is None:
         fail(f"unknown task {a.id!r}")
     path = d / "checkpoints" / f"{a.id}.json"
+    # The directory must exist before anyone writes into it: denied (or absent), the worker's write
+    # turns into a permission request and the task looks alive while nothing progresses.
+    path.parent.mkdir(parents=True, exist_ok=True)
     if a.list:
         entries = sorted(p.name for p in (d / "checkpoints").glob("*.json"))
         history = d / "checkpoints" / f"{a.id}.history.jsonl"
@@ -1144,8 +1149,12 @@ def cmd_checkpoint(a) -> int:
                          indent=2))
         return 0
     if a.show or not (a.set or a.file or a.text):
-        if not path.exists():
-            fail(f"no checkpoint recorded for task {a.id!r}")
+        found = C.newest_checkpoint(root, a.id, task.get("worktree"))
+        if found:
+            path, _ = found
+        elif not path.exists():
+            fail(f"no checkpoint recorded for task {a.id!r} (neither {path} nor "
+                 f"{(task.get('worktree') or '<worktree>')}/{C.CHECKPOINT_IN_WORKTREE})")
         data = read_json(path)
         if a.json:
             print(json.dumps(data, indent=2))
@@ -1240,9 +1249,9 @@ def cmd_replace_worker(a) -> int:
              f"(which is recorded as a decision).")
 
     cp = None
-    cp_path = d / "checkpoints" / f"{a.id}.json"
-    if cp_path.exists():
-        cp = read_json(cp_path)
+    found = C.newest_checkpoint(root, a.id, task.get("worktree"))
+    if found:
+        cp = read_json(found[0])
     task.setdefault("worker_history", []).append({
         "agent": old_agent, "pane": previous.get("pane") or task.get("pane"),
         "workspace": previous.get("workspace") or task.get("workspace"),
@@ -1611,9 +1620,9 @@ def cmd_reconcile(a) -> int:
             verdict = contract_verdict(t)
             if not verdict["valid"]:
                 problems.append(f"TASK {tid}: contract invalid ({verdict['errors'][0]})")
-        cp = d / "checkpoints" / f"{tid}.json"
-        if cp.exists() and t["status"] in ("dispatched", "working"):
-            data = read_json(cp)
+        found = C.newest_checkpoint(root, tid, t.get("worktree"))
+        if found and t["status"] in ("dispatched", "working"):
+            data = read_json(found[0])
             if data.get("last_known_commit") and t.get("commit") and \
                     data["last_known_commit"] != t["commit"]:
                 problems.append(f"TASK {tid}: checkpoint commit {str(data['last_known_commit'])[:9]} "

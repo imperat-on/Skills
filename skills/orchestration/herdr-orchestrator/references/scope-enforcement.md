@@ -28,7 +28,7 @@ kind without a verified mechanism the honest answer is `prevention: none`.
 | Mechanism | Boundary | Evidence | Bypass |
 |---|---|---|---|
 | `git config --worktree core.hooksPath` + a run-owned `pre-commit` gate | every commit in the worktree: a staged path outside `write_scope` / inside `forbidden_scope` refuses the commit | git 2.55.0: the linked worktree's commit is refused, the shared checkout's hooks path is untouched | `git commit --no-verify` (then Layer B catches it) |
-| `OPENCODE_CONFIG` pointing at a run-owned config FILE, with `edit` deny-by-default + `write_scope` allows + `external_directory: deny` + `bash` deny-by-default | the `edit` tool at sub-path resolution, external directories, and the shell, for opencode | opencode **1.18.31**: `opencode debug config` reports the injected rules (`verified: true`, exit 0 via `guard --verify-launch`); a live `opencode run` was refused editing a file outside the allow-list (`The user has specified a rule which prevents you from using this specific tool call`) with the file unchanged; the deny held against a project `.opencode/opencode.json` saying `edit: allow`. `OPENCODE_PERMISSION`, `OPENCODE_CONFIG_CONTENT` and the project config alone did **not** appear in the effective config - three mechanisms that look plausible and do nothing | a compound command embedding an allowed prefix (`git commit*` … `&& echo x > f`); caught by Layer B and the commit gate. A bare path in the permission map needs BOTH readings (`src/stats.py` and `src/stats.py/**`) or the worker is denied its own file and escapes through the shell |
+| the run-owned PROJECT config `<worktree>/.opencode/opencode.json`, with `edit` deny-by-default + `write_scope` allows + `external_directory: deny` + `bash` deny-by-default | the `edit` tool at sub-path resolution, external directories, and the shell, for opencode | opencode **1.18.31**: `opencode debug config` reports the injected rules (`verified: true`, exit 0 via `guard --verify-launch`); a live `opencode run` was refused editing a file outside the allow-list (`The user has specified a rule which prevents you from using this specific tool call`) with the file unchanged; the deny held against a project `.opencode/opencode.json` saying `edit: allow`. `OPENCODE_PERMISSION`, `OPENCODE_CONFIG_CONTENT` and the project config alone did **not** appear in the effective config - three mechanisms that look plausible and do nothing | a compound command embedding an allowed prefix (`git commit*` … `&& echo x > f`); caught by Layer B and the commit gate. A bare path in the permission map needs BOTH readings (`src/stats.py` and `src/stats.py/**`) or the worker is denied its own file and escapes through the shell |
 | `codex -s workspace-write` | coarse: writes confined to the worktree | codex-cli 0.154.0 (advertised flags) | no sub-path denial at all |
 | claude `--settings` / `--permission-mode` | **not claimed**: deny-rule behaviour under `bypassPermissions` was not verified here | claude 2.1.263 exposes the flags only | treat as detection-only |
 | any other kind | none | no verified mechanism | detection only |
@@ -105,15 +105,20 @@ nothing loaded, the worker parked at an approval dialog while the task looked he
 
 | artifact | proves | checked by |
 |---|---|---|
-| `<worktree>/.opencode/opencode.json` | the PROJECT config opencode reads from the worker's own cwd — in force with no env var at all (the one nobody can forget) | `verify-launch` probes the CLI *without* the env var: `project_config_verified` |
-| `OPENCODE_CONFIG=<run-owned file>` exported **in the worker's pane before the agent starts** | the env route, for CLIs launched in a pane whose shell you control (`herdr pane run $PANE "export ..."`) | `tr '\0' '\n' < /proc/$PID/environ \| grep OPENCODE_CONFIG` |
-| checkpoint directory allowed (`edit` + `external_directory` for `<root>/.orchestrator/checkpoints/*`, nothing else under `.orchestrator/`) | the checkpoint protocol can complete; denied, the worker stops at "Access external directory" | the probe asserts the rule is present |
+| `<worktree>/.opencode/opencode.json` | **the mechanism**: opencode reads it from the worker's own cwd, with no env var involved (nothing to forget) | `verify-launch` runs `opencode debug config` in the worktree with `OPENCODE_CONFIG*` unset → `verified: true`, `project_config` set |
+| checkpoint directory allowed in that config, pattern `<root>/.orchestrator/checkpoints/**` | the checkpoint protocol can complete; denied, the worker stops at "Access external directory" or reports it as inaccessible | live test: the worker wrote its checkpoint outside the worktree |
 | `.opencode/` in the worktree's `info/exclude` | the run-owned project config never reads as work the worker did (a dirty worktree blocks the gate for the wrong reason) | `git status --porcelain` empty right after `guard --plan` |
+| ~~`OPENCODE_CONFIG=<file>` exported in the pane~~ | **rejected by measurement, do not use** | with the env var set to a file outside the project, three live variants denied even the scoped file: opencode stops matching relative `edit` patterns. `OPENCODE_PERMISSION`/`OPENCODE_CONFIG_CONTENT` are inert. |
 
-`herdr agent start` takes no `--env`: the export has to happen in the pane's shell first. And while
-waiting for an artifact, watch the agent's state (`herdr agent list` → `blocked`) as well as the
-filesystem — a worker waiting on a permission dialog is neither stalled nor spinning, it is blocked,
-and it will sit there indefinitely.
+One more thing the same drills cost time on: the checkpoint DIRECTORY has to exist before the worker
+writes into it. `guard --plan` creates it (`<root>/.orchestrator/checkpoints/`) and so does
+`checkpoint --set`; if it is missing the worker's write lands on the requested-directory rule and
+becomes an approval prompt (or a plain refusal) instead of a file, and the task still looks alive.
+
+A generated permission file outside the worktree is kept only for audit (the plan lists it under
+`permission_file`). And while waiting for an artifact, watch the agent's state (`herdr agent list` →
+`blocked`) as well as the filesystem — a worker waiting on a permission dialog is neither stalled nor
+spinning, it is blocked, and it will sit there indefinitely.
 
 ## Layer B - detection (always)
 

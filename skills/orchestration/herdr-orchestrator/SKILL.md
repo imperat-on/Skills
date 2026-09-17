@@ -780,9 +780,12 @@ state files are hints. Details: `references/state-and-recovery.md`.
   1.18.31 - proven with `guard --verify-launch` (exit 0, `verified: true`) plus a live block. The
   version is part of the claim: prove the mechanism against the installed binary before dispatch, or
   record `prevention: none` and lean on the commit gate.
-- **Three plausible mechanisms that do nothing.** `OPENCODE_PERMISSION`, `OPENCODE_CONFIG_CONTENT` and
+- **Four plausible mechanisms, one of which also breaks the scope.** `OPENCODE_PERMISSION`, `OPENCODE_CONFIG_CONTENT` and
   a project `.opencode/opencode.json` all *look* like write boundaries on opencode 1.18.31 and none of
-  them shows up in `opencode debug config`. Only `OPENCODE_CONFIG` pointing at a file did. A mechanism
+  them shows up in `opencode debug config`, and `OPENCODE_CONFIG=<file outside the project>` turns out
+  to be worse: it makes opencode stop matching the relative `edit` patterns, so the scope allow never
+  lands and even in-scope writes are refused (three live variants, all denied). What works is the
+  **project config inside the worktree** — and a mechanism
   that "should work" is not a mechanism: run the probe.
 - **An edit-only write boundary.** With only `edit` constrained, a live worker was denied an edit and
   **wrote the file through the shell** anyway - the boundary looked green and leaked. Constrain `bash`
@@ -912,7 +915,16 @@ The skill is working when this scenario completes with real evidence:
     replacement a fresh pane; an `agent prompt` targeted at the old pane fails with
     `agent_not_found` after the kill. `herdr agent` has no `stop` subcommand — closing the pane is
     the way to retire an agent.
-42. **Seed the checkpoint at dispatch, never rely on the worker to create it.** Long tasks get one
+42. **Seed the checkpoint at dispatch, never rely on the worker to create it.** The checkpoint
+    DIRECTORY must also exist before the worker writes: denied or missing, its write lands on the
+    requested-directory rule and turns into an approval prompt while the task looks alive. `guard
+    --plan` and `checkpoint --set` both create it. And tell the worker to write
+    **`<worktree>/.checkpoint.json`** (relative path): writing outside the worktree is fragile three
+    ways over — an approval dialog, a missing parent, and a relative path full of `..`
+    (`.../src/calc.py/../../../../../checkpoints/x.json`) that the permission matcher refuses even
+    when the absolute path is allowed. `resume`/`replace-worker`/`checkpoint --show` read the newest
+    of both locations, and `guard --plan` keeps the in-worktree path in the exclude so it never
+    reads as worker output. Long tasks get one
     from the orchestrator (`orch checkpoint --phase 0 ... --commit <base>`) the moment the worktree
     exists; the worker updates the same file. Two live drills had workers ignore the instruction
     entirely — one of them because the rules refused the write — and the replacement package said
