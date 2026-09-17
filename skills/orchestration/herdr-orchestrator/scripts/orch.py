@@ -870,13 +870,13 @@ def collect_verification(root, state, task, contract) -> dict:
         ev["changed_files"] = [p for p in names.splitlines() if p.strip()] if code == 0 else []
     else:
         ev["commits"], ev["changed_files"] = [], []
-    commit = task.get("commit") or (ev["commits"][0] if ev["commits"] else None)
+    commit = C.as_text(task.get("commit")) or (ev["commits"][0] if ev["commits"] else None)
     ev["commit"] = commit
     if commit:
         code, _ = run(["git", "-C", str(worktree), "cat-file", "-e", f"{commit}^{{commit}}"])
         ev["commit_exists"] = code == 0
-        code, _ = run(["git", "-C", state["repo"]["integration_checkout"], "merge-base",
-                       "--is-ancestor", commit, "HEAD"])
+        code, _ = run(["git", "-C", str(state["repo"]["integration_checkout"]), "merge-base",
+                       "--is-ancestor", str(commit), "HEAD"])
         ev["commit_integrated"] = code == 0
     else:
         ev["commit_exists"] = False

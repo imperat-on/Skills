@@ -263,6 +263,20 @@ def load_structured_text(text: str):
 
 # --------------------------------------------------------------------------- task contract
 
+# Identifier-shaped fields. The tolerant YAML subset coerces bare digits to int, so a short
+# commit sha that happens to be all digits ("3775697") arrives as an int and blows up when it
+# reaches a command line (`TypeError: expected str ... not int`). Everything that ends up in an
+# argv, a branch name or a git range is forced back to text at the boundary.
+TEXT_FIELDS = ["task_id", "role", "branch", "worktree", "base_commit", "commit", "worker",
+               "agent_kind", "model", "mutation_policy", "checkpoint_policy", "scope_justification",
+               "when_blocked"]
+
+
+def as_text(value) -> str:
+    """Identifiers are text, always — never a coerced number."""
+    return str(value).strip() if value is not None else value
+
+
 def normalize_contract(raw: dict, task_id: str | None = None) -> dict:
     c = dict(raw or {})
     if task_id:
@@ -288,6 +302,9 @@ def normalize_contract(raw: dict, task_id: str | None = None) -> dict:
     c["contract_version"] = CONTRACT_VERSION
     if c.get("objective") is not None and not isinstance(c["objective"], str):
         c["objective"] = " ".join(str(x) for x in c["objective"])
+    for field in TEXT_FIELDS:
+        if c.get(field) is not None:
+            c[field] = as_text(c[field])
     return c
 
 
@@ -404,6 +421,9 @@ def parse_result(text: str) -> dict:
     out = dict(data)
     if isinstance(out.get("result"), str):
         out["result"] = out["result"].strip().upper()
+    for field in ("commit", "base_commit", "branch", "worker", "agent_kind"):   # 3775697 != 3775697
+        if out.get(field) is not None:
+            out[field] = as_text(out[field])
     for field in ("changed_files", "scope_violations", "blockers", "notes", "tests"):
         val = out.get(field)
         if val is None:
@@ -442,6 +462,9 @@ def normalize_checkpoint(raw: dict, task_id: str | None = None) -> dict:
     cp = dict(raw or {})
     if task_id:
         cp.setdefault("task_id", task_id)
+    for field in ("last_known_commit", "task_id"):        # same numeric-sha trap as contracts
+        if cp.get(field) is not None:
+            cp[field] = as_text(cp[field])
     for field in ("completed", "current", "remaining", "changed_files", "decisions", "blockers"):
         val = cp.get(field)
         if val is None:

@@ -45,6 +45,24 @@ never to make a run look cleaner.
 6. Record what changed and why (run decisions, or the proposal entry) and mark the proposal `applied`.
 7. Rejected proposals are marked `rejected` with the reason - never deleted.
 
+## Implementation rule: identifiers are text
+
+The tolerant YAML subset that parses worker reports, contracts and checkpoints coerces bare digits to
+`int`. A short commit sha that happens to be all digits (`3775697` — roughly 4% of 7-char shas)
+therefore arrived as a number and crashed the merge gate with
+`TypeError: expected str, bytes or os.PathLike object, not int` at the first `git` call that used it.
+
+Two rules follow, both already enforced in `contracts.TEXT_FIELDS` + `as_text()`:
+
+- every identifier-shaped field (`task_id`, `branch`, `worktree`, `base_commit`, `commit`,
+  `last_known_commit`, `worker`, `agent_kind`, `model`) is normalised back to text at the parse
+  boundary;
+- anything that reaches an argv is stringified at the call site too (`str(...)`), so a future field
+  cannot reintroduce the bug.
+
+Keep `TestNumericIdentifiers` whenever this area changes: it fails loudly on the coercing behaviour and
+is the only test that proves the boundary is handled.
+
 ## Guardrails
 
 - No secrets, tokens, credentials or private paths in proposals or skill files.

@@ -1023,5 +1023,31 @@ class TestScopeOverlap(OrchTestCase):
         self.assertIn("OVERLAP: NONE", r.stdout)
 
 
+class TestNumericIdentifiers(OrchTestCase):
+    """Invariant (v1.4): a short commit sha that happens to be all digits is TEXT, never a number.
+    The tolerant YAML subset coerced `commit: 3775697` to int, and the merge gate then crashed with
+    `TypeError: expected str, bytes or os.PathLike object, not int` (~4% of 7-char shas)."""
+
+    def test_result_report_with_a_numeric_sha_stays_text(self):
+        res = contracts.parse_result("result: DONE\ntask_id: a\ncommit: 3775697\n"
+                                     "changed_files: []\ntests: []\nscope_violations: []\n"
+                                     "blockers: []\nnotes: []\n")
+        self.assertEqual(res["commit"], "3775697")
+        self.assertIsInstance(res["commit"], str)
+
+    def test_numeric_commit_sha_does_not_crash_the_gate(self):
+        self.init()
+        wt, branch, commit = self.prepare_task("a")
+        self.close_gate("a", verdict="FAIL")
+        path = self.root / ".orchestrator" / "tasks.json"      # the coerced form the parser produced
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["tasks"][0]["commit"] = 3775697
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        r = self.orch("merge-gate", "--id", "a", "--live")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("review=fail", r.stdout)                 # a normal verdict...
+        self.assertEqual(r.stderr.strip(), "")                 # ...not a traceback
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
