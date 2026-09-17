@@ -80,6 +80,29 @@ installed deny rule still parks the worker (config: `~/.config/opencode/opencode
 configuration during discovery and record what it denies. `codex` keeps its approval policy and sandbox
 in `~/.codex/config.toml`; explicit CLI flags override it.
 
+## Write-boundary granularity per kind (measured on this host, 2026-09-17)
+
+The question is not "does it have a permission system" but "what does it actually confine", measured
+one kind at a time against the installed binary:
+
+| kind | level | what it really confines | measured how |
+|---|---|---|---|
+| `opencode` 1.18.31 | **sub-path** | deny-by-default `edit`, `bash` and external dirs, with the contracted tree allowed; the checkpoint path allowed inside the worktree | `opencode debug config` under the run-owned project config; a live refusal of an outside write; the scoped file edited **and committed**; the checkpoint written in 15s |
+| `claude` 2.1.263 | sub-path, **configured not exercised** | `--settings` with `Edit(**)` deny + `Edit(<scope>/**)` allow; the binary parses the file and requires `Edit(path)` rules (`Write(...)` rules are ignored with a warning) | the binary's own warning about rule syntax; the live denial could not be exercised here because the configured provider refuses the connection |
+| `codex` 0.154.0 | **worktree only, and it includes /tmp** | shell commands run under `sandbox: workspace-write [workdir, /tmp, $TMPDIR]` | the line `codex exec` prints at startup. No sub-path denial, and a worktree under /tmp is not confined at all |
+| `prime` (help surface) | none | `-t/--tools` restricts which tools run, never where they write; its mechanical value is `--autonomous-gate <check>` plus `--autonomous-max-tokens/-turns/-timeout` | `prime-agent help` / `help config`: no permission or sandbox flag exists. Exercised live: it wrote a file OUTSIDE the repo on request, and when the autonomous gate was the test file itself it EDITED THE TEST to make the gate pass |
+| `hermes` | n/a (it is the orchestrator) | approvals and hooks are user decisions (`--yolo`, `--accept-hooks`) | `hermes --help` |
+
+Three operational consequences:
+
+1. **Never park run worktrees in `/tmp`** when the kind is `codex`: the sandbox grants /tmp and $TMPDIR
+   by design, so the worktree boundary evaporates. Use a run directory outside /tmp.
+2. **`claude` and `codex` claims must be re-measured the first time a run actually uses them.** Their
+   plans say `configured`/`coarse` precisely because a configured boundary is not a proven one; only
+   `opencode` has a launch-time probe (`guard --verify-launch`).
+3. `prime` has no write boundary: run it with the commit gate and the post-hoc scope check, and use its
+   `--autonomous-gate` as the run's required check and its token/turn limits as the budget.
+
 ## The engine is part of the state
 
 A worker is a *(kind, model, launch mode)* triple, and the model belongs in the run state next to the

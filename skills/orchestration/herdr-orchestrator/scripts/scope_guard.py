@@ -504,22 +504,57 @@ KIND_ADAPTERS = {
                  "boundary was bypassed in a live test by writing through bash, so bash is denied by "
                  "default with the run's own commands allowed",
     },
-    "codex": {
-        "mechanism": "sandbox workspace-write (writes confined to the worktree)",
-        "write_boundary": "worktree",
-        "verified_on": "codex-cli 0.154.0 `-s workspace-write` (advertised; no sub-path denial)",
+    "prime": {
+        "mechanism": "no path-level write boundary: `-t/--tools` is a TOOL allowlist, not a path "
+                     "rule. What it does offer is mechanical EXECUTION control: `--autonomous` with "
+                     "`--autonomous-gate <command>` (the run only ends when the gate passes, with "
+                     "retries/timeout) and `--autonomous-max-tokens/-max-turns/-timeout-ms` "
+                     "(the token budget is enforced by the binary, not by policy text)",
+        "write_boundary": "tool-level",
+        "verified_on": "prime-agent help (0.5.x on this host): the option surface is tools + "
+                       "autonomous gates/limits; there is no permission or sandbox flag, and no "
+                       "path-scoped rule in `help`/`help config`",
         "probe": None,
         "env_var": None,
-        "notes": "coarse: keeps the worker inside its worktree, cannot deny one subtree",
+        "notes": "use the gate as the run's required check and the token/turn limits as the budget, "
+                 "but point the gate at something the worker CANNOT write: exercised live, it edited "
+                 "the very test the gate ran to make it pass. Keep the commit gate and detection in "
+                 "force because the write boundary is absent",
+    },
+    "codex": {
+        "mechanism": "sandbox workspace-write: model shell commands run sandboxed with writable "
+                     "roots [workdir, /tmp, $TMPDIR] — a WORKTREE-level boundary at best",
+        "write_boundary": "worktree+tmp",
+        "verified_on": "codex-cli 0.154.0 prints `sandbox: workspace-write [workdir, /tmp, $TMPDIR]` "
+                       "when it starts. Two consequences, both material: it cannot deny a subtree "
+                       "of the worktree (no sub-path gate), and a worktree under /tmp — or anywhere "
+                       "the worker's TMPDIR points — is NOT confined at all, because /tmp is "
+                       "writable by design. `codex exec` did not run non-interactively on this host "
+                       "(401 API_KEY_REQUIRED from the configured endpoint), so this is what the "
+                       "binary advertises, not a denial exercised live.",
+        "probe": None,
+        "env_var": None,
+        "launch_args": ["-s", "workspace-write", "-C", "{worktree}"],
+        "notes": "put run worktrees OUTSIDE /tmp when you rely on this; expect no sub-path denial, "
+                 "so keep the commit gate and the post-hoc scope check in force",
     },
     "claude": {
-        "mechanism": "settings permission rules (--settings / --permission-mode)",
-        "write_boundary": "unverified",
-        "verified_on": "claude 2.1.263 exposes --settings/--permission-mode, but deny-rule behaviour "
-                       "under bypassPermissions was not verified on this host -> not claimed",
+        "mechanism": "--settings with permissions.deny/allow using **Edit(path) rules** (Edit covers "
+                     "every file-editing tool; `Write(...)` rules are ignored with a warning)",
+        "write_boundary": "sub-path",
+        "verified_on": "claude 2.1.263 READS AND VALIDATES the settings file: run with a settings "
+                       "file containing `Write(...)` rules, the binary reports `Write(**) is not "
+                       "matched by file permission checks — only Edit(path) rules are. Use Edit(**) "
+                       "instead`, so the file is parsed and the documented syntax is Edit(path). "
+                       "The live denial could NOT be exercised on this host: the configured provider "
+                       "refuses the connection (`API Error: Connection refused`, "
+                       "unrecognized_model deepseek-v4-flash). Claimed as a configured boundary, "
+                       "NOT as one exercised in force.",
         "probe": None,
         "env_var": None,
-        "notes": "treat as detection-only until the deny behaviour is verified in the run",
+        "notes": "write the settings with Edit(**) deny + Edit(<scope>/**) allow pairs; deny rules "
+                 "are documented as enforced in every mode; verify in force the first time a run "
+                 "actually uses this kind",
     },
 }
 
@@ -609,6 +644,13 @@ def opencode_permission(contract: dict, *, checkpoint_dir=None) -> dict:
         cmd = str(check).strip()
         if cmd:
             bash[cmd if cmd.endswith("*") else cmd + "*"] = "allow"
+    # Hooks are skippable: `--no-verify`, `-n` and a redirect of core.hooksPath all bypass the
+    # run-owned commit gate. Measured: the kit's guard-dangerous already blocks the first two in
+    # opencode, and `git -c core.hooksPath=... commit` falls to the `*` deny because it stops
+    # matching `git commit*` — but the worker's own config should not depend on the plugin being
+    # installed, so the denies are explicit and come after the allows.
+    for banned in ("*--no-verify*", "* core.hooksPath*", "*core.hooksPath=*", "git commit -n *"):
+        bash[banned] = "deny"
     # Checkpoint INSIDE the worktree: the path a worker picks naturally. Writing outside it turned
     # out to be fragile in three different ways (an approval dialog, a missing parent directory, and
     # a relative path full of `..` that the pattern matcher does not resolve) — a live run showed the
@@ -629,6 +671,42 @@ def opencode_permission(contract: dict, *, checkpoint_dir=None) -> dict:
         "external_directory": external_directory,
         "bash": bash,
     }
+
+
+def claude_settings(contract: dict, out_dir) -> Path:
+    """Write the run-owned claude settings: Edit(**) deny plus Edit(<scope>/**) allows.
+
+    Measured on claude 2.1.263: the binary parses this file and warns that `Write(...)` rules are
+    ignored — "only Edit(path) rules are" matched by file permission checks, and Edit rules cover
+    every file-editing tool. Deny rules are documented as enforced in every permission mode.
+    """
+    allow = []
+    for pattern in scope_patterns(contract, "write_scope"):
+        p = str(pattern).strip()
+        if p in ("**", "*"):
+            continue
+        allow.append(f"Edit({p})")
+        if not p.endswith(("*", "/")):
+            allow.append(f"Edit({p}/**)")
+    deny = ["Edit(**)"]
+    for pattern in scope_patterns(contract, "forbidden_scope"):
+        p = str(pattern).strip()
+        if p:
+            deny.append(f"Edit({p})")
+    # the same two doors the opencode boundary closes: hooks are skippable, history is rewritable
+    deny += ["Bash(git commit --no-verify:*)", "Bash(git commit -n:*)", "Bash(git push:*)",
+             "Bash(git reset --hard:*)"]
+    bash_allow = ["Bash(git status:*)", "Bash(git diff:*)", "Bash(git add:*)", "Bash(git commit:*)",
+                  "Bash(git log:*)", "Bash(git rev-parse:*)", "Bash(git show:*)"]
+    for check in (contract.get("required_checks") or []):
+        cmd = str(check).strip()
+        if cmd:
+            bash_allow.append("Bash(" + (cmd.rstrip("*").rstrip(":") if cmd.endswith("*") else cmd)
+                              + ":*)")
+    payload = {"permissions": {"deny": deny, "allow": allow + bash_allow, "defaultMode": "default"}}
+    path = Path(out_dir) / "claude-settings.json"
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 def plan_prevention(contract: dict, kind: str, *, out_dir, worktree=None) -> dict:
@@ -680,7 +758,7 @@ def plan_prevention(contract: dict, kind: str, *, out_dir, worktree=None) -> dic
         plan_file.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
         plan["artifacts"].append(str(plan_file))
         return plan
-    if adapter["write_boundary"] == "sub-path":
+    if adapter["write_boundary"] == "sub-path" and adapter.get("probe"):
         orch = orchestrator_dir(out_dir)
         # The worker writes its checkpoint into a directory that must already exist: creating it is
         # the orchestrator's job (a missing parent makes the worker's write fail or turn into a
@@ -723,12 +801,46 @@ def plan_prevention(contract: dict, kind: str, *, out_dir, worktree=None) -> dic
                 f"({permission_file}); verify before dispatch",
             ],
         })
-    elif adapter["write_boundary"] == "worktree":
+    elif adapter["write_boundary"] == "sub-path" and not adapter.get("probe"):
+        settings = claude_settings(contract, out_dir)
+        plan.update({
+            "prevention": "configured",
+            "launch_args": ["--settings", str(settings)],
+            "artifacts": plan["artifacts"] + [str(settings)],
+            "limitations": [
+                "the settings file is parsed and validated by the binary (it reports the Edit(path) "
+                "rule syntax), but the denial was not exercised in force on this host: the "
+                "configured provider refused the connection. Treat it as configured, not proven, "
+                "and exercise it live the first time a run uses this kind",
+                "rules are Edit(path): Edit(**) denies every file-editing tool and the contracted "
+                "tree is allowed per path; Write(...) rules are ignored by the binary",
+                "Bash rules are best-effort prefixes (the agent can build an equivalent command); "
+                "the commit gate and the post-hoc scope check stay in force",
+            ],
+        })
+    elif adapter["write_boundary"] in ("worktree", "worktree+tmp"):
+        limits = ["writes are confined to the worktree, not to write_scope: an out-of-scope path "
+                  "inside the worktree is still possible and is caught by detection"]
+        if adapter["write_boundary"] == "worktree+tmp":
+            limits.append("the sandbox also writable-roots /tmp and $TMPDIR by design: a worktree "
+                          "under /tmp is not confined at all, so keep run worktrees outside /tmp "
+                          "when you rely on this")
         plan.update({
             "prevention": "coarse",
-            "limitations": ["writes are confined to the worktree, not to write_scope: an "
-                            "out-of-scope path inside the worktree is still possible and is caught "
-                            "by detection"],
+            "launch_args": [str(a).format(worktree=str(worktree or contract.get("worktree") or ""))
+                            for a in (adapter.get("launch_args") or [])],
+            "limitations": limits,
+        })
+    elif adapter["write_boundary"] == "tool-level":
+        plan.update({
+            "prevention": "none",
+            "limitations": [
+                "no path-level write boundary in this kind: `-t/--tools` restricts WHICH tools run, "
+                "not where they write",
+                "what it does offer is mechanical control of execution: use --autonomous with "
+                "--autonomous-gate <required check> and the --autonomous-max-tokens/-turns/-timeout "
+                "limits as the run's budget",
+            ],
         })
     else:
         plan.update({
@@ -757,7 +869,14 @@ def verify_launch(contract: dict, kind: str, *, cwd=None, observed: str | None =
               "mechanism": adapter["mechanism"] if adapter else None, "reasons": [],
               "observed": None, "verified_at": now()}
     if adapter is None or not (adapter.get("probe") or adapter.get("env_var")):
-        result["reasons"].append(f"no verifiable write-boundary mechanism for kind {kind!r}")
+        if adapter:
+            result["reasons"].append(
+                f"{kind}: no probe command exists for this kind, so the boundary cannot be verified "
+                f"at launch. Boundary level: {adapter['write_boundary']!r}; the plan carries the "
+                f"launch args to pass. Evidence on record: {str(adapter.get('verified_on'))[:160]}")
+        else:
+            result["reasons"].append(f"no write-boundary mechanism is known for kind {kind!r} "
+                                     f"(detection + commit gate only)")
         return result
 
     wt = worktree or contract.get("worktree")

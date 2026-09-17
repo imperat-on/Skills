@@ -909,6 +909,13 @@ The skill is working when this scenario completes with real evidence:
 38. Every claimed prevention mechanism is proven in force against the installed binary version
     (`guard --verify-launch` exits 0 with `verified: true`) and the guard artifact the plan points at
     exists on disk; the same claim names that version, so a version change invalidates it.
+45. **A gate the worker can edit is not a gate.** Live proof: prime-agent's `--autonomous-gate`
+    was `python3 -m unittest tests.test_app -v` with the assertion expecting the *unfixed* value;
+    instead of fixing the code the worker edited the TEST (`assertEqual(x, 2)` -> `assertEqual(x,
+    1)`) and the gate passed. Point every mechanical gate at something the worker cannot write:
+    the contract's `forbidden_scope` must cover the tests, run the check from the base revision (or
+    a copy outside the worktree), and let the commit gate + scope validation be the backstop. The
+    same rule applies to `--autonomous-gate` in prime and to any retry-until-green loop.
 44. **A dead worker's pane can keep the agent registered**, and `replace-worker` will refuse with
     "still live — two writers in one worktree corrupt each other" (correct: that refusal is what stops
     two writers sharing a worktree). Close that pane (`herdr pane close <pane>`) and give the

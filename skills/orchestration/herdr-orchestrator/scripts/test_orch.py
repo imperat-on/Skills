@@ -592,6 +592,38 @@ class TestScopeEnforcement(OrchTestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("backend/auth.ts", r.stdout)
 
+    def test_plan_per_kind_reports_the_honest_boundary(self):
+        """Mesmo rigor nos outros CLIs: cada plano diz o nivel REAL de fronteira e os args a passar.
+
+        Medido nesta maquina: claude valida o settings e exige Edit(path); codex declara
+        workspace-write com /tmp gravavel; prime nao tem fronteira de caminho (tem gates e budget).
+        """
+        self.init()
+        wt, _branch, _commit = self.prepare_task("a")
+
+        r = self.orch("guard", "--id", "a", "--plan", "--kind", "claude")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        plan = json.loads(r.stdout)["prevention_plan"]
+        self.assertEqual(plan["prevention"], "configured")
+        settings_path = next(a for a in plan["artifacts"] if a.endswith("claude-settings.json"))
+        settings = json.loads(Path(settings_path).read_text(encoding="utf-8"))
+        self.assertIn("Edit(**)", settings["permissions"]["deny"])
+        self.assertTrue(any(a.startswith("Edit(src/app") for a in settings["permissions"]["allow"]),
+                        settings["permissions"]["allow"])
+        self.assertEqual(plan["launch_args"][0], "--settings")
+        self.assertTrue(any("not exercised in force" in lim for lim in plan["limitations"]))
+
+        r = self.orch("guard", "--id", "a", "--plan", "--kind", "codex")
+        plan = json.loads(r.stdout)["prevention_plan"]
+        self.assertEqual(plan["prevention"], "coarse")
+        self.assertEqual(plan["launch_args"], ["-s", "workspace-write", "-C", str(wt)])
+        self.assertTrue(any("/tmp" in lim for lim in plan["limitations"]))
+
+        r = self.orch("guard", "--id", "a", "--plan", "--kind", "prime")
+        plan = json.loads(r.stdout)["prevention_plan"]
+        self.assertEqual(plan["prevention"], "none")
+        self.assertTrue(any("--autonomous-gate" in lim for lim in plan["limitations"]))
+
     def test_checkpoint_written_inside_the_worktree_is_found(self):
         """O caminho confiavel para o worker e DENTRO do worktree: um worker ao vivo foi negado
         escrevendo fora dele com `.../src/calc.py/../../../../../checkpoints/x.json` (caminho
@@ -690,6 +722,9 @@ class TestScopeEnforcement(OrchTestCase):
         self.assertEqual(permission["external_directory"]["*"], "deny")
         # o shell é a segunda porta: deny por padrão, com o que o run precisa
         self.assertEqual(permission["bash"]["*"], "deny")
+        # furar o commit gate nao pode depender de plugin instalado: deny explicito
+        self.assertEqual(permission["bash"]["*--no-verify*"], "deny")
+        self.assertEqual(permission["bash"]["*core.hooksPath=*"], "deny")
         # o protocolo de checkpoint escreve FORA do worktree: negado, o worker para num dialogo de
         # permissao e o checkpoint nunca aparece (achado de drill ao vivo)
         # negado, o worker para num dialogo "Access external directory" e o checkpoint nunca

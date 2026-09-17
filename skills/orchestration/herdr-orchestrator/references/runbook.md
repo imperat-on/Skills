@@ -48,6 +48,11 @@ python3 $O --repo-root <repo> set-task --id <t> --worktree <wt> --branch agent/<
 python3 $O --repo-root <repo> guard --id <t> --install-hook --kind opencode --plan --verify-launch
 ```
 
+- **Pass the plan's `launch_args` at dispatch**, and read what level the plan claims before
+  trusting it: `mechanical` only for a kind with a launch-time probe (`opencode`), `configured` for a
+  parsed-but-unexercised boundary (`claude`), `coarse` for worktree-level sandboxes (`codex` — and its
+  sandbox includes /tmp, so keep worktrees out of /tmp), `none` where no boundary exists (`prime`; use
+  its `--autonomous-gate` and token limits instead).
 - **Record the worktree before installing the guard.** Installing first used to fall back to the
   shared checkout and still log `scope_guard_installed`.
 - Pass **`--kind`** explicitly, or record the launch first: a bare `auto` means no adapter is looked
