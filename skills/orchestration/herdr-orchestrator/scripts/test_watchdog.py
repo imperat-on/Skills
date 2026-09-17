@@ -173,6 +173,31 @@ class WatchdogTestCase(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertTrue((self.root / ".orchestrator" / "watchdog" / "last_sample.json").is_file())
 
+    def test_required_checkpoint_missing_is_flagged(self):
+        """checkpoint_policy=required and nothing on disk: a worker killed now forces reconstruction
+        from Git alone, so the orchestrator has to be told (drill finding: two workers ignored the
+        instruction and nothing noticed)."""
+        self.orch("contract", "--id", "a", "--checkpoint-policy", "required")
+        # past checkpoint_after (600) but under stall_after (900): no write and no commit for 700s
+        self.age_worktree(time.time() - 700)
+        self.age_last_commit(time.time() - 700)
+        r, payload = self.report("--json")
+        row = self.task_row(payload)
+        self.assertEqual(row["classification"], "checkpoint_missing")
+        self.assertIn("reconstruct", row["why"])
+        self.assertEqual(payload["verdict"], "attention")
+
+    def test_required_checkpoint_present_is_not_flagged(self):
+        self.orch("contract", "--id", "a", "--checkpoint-policy", "required")
+        ck = self.root / ".orchestrator" / "checkpoints" / "a.json"
+        ck.parent.mkdir(parents=True, exist_ok=True)
+        ck.write_text(json.dumps({"task_id": "a", "phase": 1, "current": "implementando",
+                                  "last_known_commit": self.commit}), encoding="utf-8")
+        self.age_worktree(time.time() - 700)
+        self.age_last_commit(time.time() - 700)
+        r, payload = self.report("--json")
+        self.assertNotEqual(self.task_row(payload)["classification"], "checkpoint_missing")
+
     def test_agent_gone_is_failed_and_needs_attention(self):
         self.set_runtime(agents=[])
         r, payload = self.report("--json")

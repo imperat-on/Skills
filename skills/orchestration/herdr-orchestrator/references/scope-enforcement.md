@@ -97,6 +97,24 @@ Note the path normalisation trap behind that bug: `path_matches` used to `lstrip
 *every* leading dot and slash — `.pytest_cache/x` became `pytest_cache/x` and matched nothing. Strip
 one leading `./` at a time instead.
 
+### Composition: what has to be TRUE at launch (not just generated)
+
+Three artifacts and one exclusion are what make the boundary real for an opencode worker. Generating
+them is not the same as them being in force, and a live drill failed exactly there — rules generated,
+nothing loaded, the worker parked at an approval dialog while the task looked healthy.
+
+| artifact | proves | checked by |
+|---|---|---|
+| `<worktree>/.opencode/opencode.json` | the PROJECT config opencode reads from the worker's own cwd — in force with no env var at all (the one nobody can forget) | `verify-launch` probes the CLI *without* the env var: `project_config_verified` |
+| `OPENCODE_CONFIG=<run-owned file>` exported **in the worker's pane before the agent starts** | the env route, for CLIs launched in a pane whose shell you control (`herdr pane run $PANE "export ..."`) | `tr '\0' '\n' < /proc/$PID/environ \| grep OPENCODE_CONFIG` |
+| checkpoint directory allowed (`edit` + `external_directory` for `<root>/.orchestrator/checkpoints/*`, nothing else under `.orchestrator/`) | the checkpoint protocol can complete; denied, the worker stops at "Access external directory" | the probe asserts the rule is present |
+| `.opencode/` in the worktree's `info/exclude` | the run-owned project config never reads as work the worker did (a dirty worktree blocks the gate for the wrong reason) | `git status --porcelain` empty right after `guard --plan` |
+
+`herdr agent start` takes no `--env`: the export has to happen in the pane's shell first. And while
+waiting for an artifact, watch the agent's state (`herdr agent list` → `blocked`) as well as the
+filesystem — a worker waiting on a permission dialog is neither stalled nor spinning, it is blocked,
+and it will sit there indefinitely.
+
 ## Layer B - detection (always)
 
 ```bash

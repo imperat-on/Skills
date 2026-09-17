@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -591,6 +592,47 @@ class TestScopeEnforcement(OrchTestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("backend/auth.ts", r.stdout)
 
+    @unittest.skipUnless(shutil.which("opencode"), "opencode CLI not installed")
+    def test_project_config_lands_in_the_worktree_even_when_the_contract_lacks_it(self):
+        """O contrato do drill ao vivo nao tinha `worktree` (foi registrado depois com set-task) e
+        por isso o arquivo de PROJETO nunca foi escrito: a fronteira existia so no papel."""
+        self.init()
+        wt, branch, _ = self.make_worktree("a")
+        self.add_task("a", mutates=1, scope="src/app")
+        self.make_contract("a", branch=branch)          # contrato SEM --worktree
+        self.orch("set-task", "--id", "a", "--status", "working", "--worktree", str(wt),
+                  "--branch", branch, "--launch-kind", "opencode")
+        r = self.orch("guard", "--id", "a", "--plan")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        plan = json.loads(r.stdout)["prevention_plan"]
+        self.assertTrue(plan["project_config"], plan)
+        self.assertTrue(Path(plan["project_config"]).is_file())
+        self.assertEqual(plan["project_config"], str(wt / ".opencode" / "opencode.json"))
+        v = self.orch("guard", "--id", "a", "--verify-launch", "--cwd", str(wt))
+        self.assertEqual(v.returncode, 0, v.stdout + v.stderr)
+        self.assertTrue(json.loads(v.stdout)["launch_verification"]["project_config_verified"])
+        self.assertEqual(subprocess.run(["git", "-C", str(wt), "status", "--porcelain"],
+                                        capture_output=True, text=True).stdout.strip(), "")
+
+    @unittest.skipUnless(shutil.which("opencode"), "opencode CLI not installed")
+    def test_verify_launch_probes_the_cli_and_the_project_config(self):
+        """O probe roda o CLI de verdade: o arquivo de PROJETO no worktree tem que estar em força
+        mesmo sem a variavel de ambiente — foi a falha do drill (fronteira gerada, nada em vigor,
+        worker parado num dialogo de permissao)."""
+        self.init()
+        self.prepare_task("a")
+        r = self.orch("guard", "--id", "a", "--plan")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        wt = json.loads(r.stdout)["worktree"]
+        r2 = self.orch("guard", "--id", "a", "--verify-launch", "--cwd", wt)
+        self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
+        v = json.loads(r2.stdout)["launch_verification"]
+        self.assertTrue(v["verified"], v["reasons"])
+        self.assertTrue(v["project_config_verified"], v)
+        self.assertTrue(v["project_config"].endswith(".opencode/opencode.json"))
+        self.assertEqual(v["observed"]["edit"]["*"], "deny")
+        self.assertEqual(v["observed"]["bash"]["*"], "deny")
+
     def test_prevention_plan_is_generated_from_the_contract(self):
         self.init()
         self.prepare_task("a")
@@ -625,6 +667,28 @@ class TestScopeEnforcement(OrchTestCase):
         self.assertEqual(permission["external_directory"]["*"], "deny")
         # o shell é a segunda porta: deny por padrão, com o que o run precisa
         self.assertEqual(permission["bash"]["*"], "deny")
+        # o protocolo de checkpoint escreve FORA do worktree: negado, o worker para num dialogo de
+        # permissao e o checkpoint nunca aparece (achado de drill ao vivo)
+        # negado, o worker para num dialogo "Access external directory" e o checkpoint nunca
+        # aparece (achado de drill ao vivo). O ARQUIVO GERADO pelo plano tem que liberar esse
+        # diretorio — e nada mais fora do escopo, tasks.json inclusive.
+        generated = json.loads(Path(plan["launch_env"][env_var]).read_text(encoding="utf-8"))["permission"]
+        orch = sg.orchestrator_dir(Path(plan["launch_env"][env_var]).parent)
+        ck_glob = str(Path(orch) / "checkpoints" / "*")
+        self.assertEqual(generated["edit"][ck_glob], "allow")
+        self.assertEqual(generated["external_directory"][ck_glob], "allow")
+        self.assertEqual(generated["external_directory"]["*"], "deny")
+        self.assertNotIn(str(Path(orch) / "tasks.json"), generated["edit"])
+        self.assertNotIn(str(Path(orch) / "state.json"), generated["edit"])
+        # defesa em profundidade: o mesmo bloco vai para dentro do worktree (opencode le o arquivo de
+        # PROJETO), e o arquivo NAO pode fazer o worktree parecer sujo
+        proj = Path(plan["project_config"])
+        self.assertTrue(proj.is_file(), "o arquivo de projeto foi escrito no worktree")
+        self.assertEqual(json.loads(proj.read_text())["permission"]["edit"]["*"], "deny")
+        wt = Path(out["worktree"])
+        status = sg.subprocess.run(["git", "-C", str(wt), "status", "--porcelain"],
+                                   capture_output=True, text=True).stdout.strip()
+        self.assertEqual(status, "", f"worktree limpo apesar do arquivo de projeto: {status!r}")
         self.assertEqual(permission["bash"]["git commit*"], "allow")
 
     def test_launch_verification_rejects_unusable_payloads_without_crashing(self):

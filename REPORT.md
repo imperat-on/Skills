@@ -243,3 +243,40 @@ existiam) + `./hooks/install-hooks.sh --only opencode`.
 **Lacuna conhecida:** chamada *bloqueada* não entra em `audit.jsonl` (o log é
 pós-execução; o bloqueio acontece antes). O agente vê a mensagem, mas o histórico
 não registra a tentativa. Corrigível pondo um `log` dentro do guard.
+
+## Orquestração: fronteira de escrita e recuperação de worker morto (2026-09-17)
+
+Duas coisas que só execução ao vivo ensina, e que mudaram a skill `herdr-orchestrator`
+(v1.6.0): a **fronteira de escrita em força** (prevenção, não detecção) e a
+**recuperação de worker morto** exercitada com `kill -9` — oito drills, cinco deles
+falhando de formas diferentes.
+
+Prevenção (opencode 1.18.31, medida com `opencode debug config` e `opencode run`):
+
+| # | Mecanismo testado | Resultado |
+|---|---|---|
+| 1 | `OPENCODE_PERMISSION` (env) | **inerte** — a config efetiva vem vazia |
+| 2 | `OPENCODE_CONFIG_CONTENT` (env) | **inerte** |
+| 3 | `.opencode/opencode.json` do projeto | **vale** (lido do cwd do worker) |
+| 4 | `OPENCODE_CONFIG=<arquivo>` (env) | **vale** — mas só se exportado no pane antes do `agent start`; provado em `/proc/<pid>/environ` |
+| 5 | fronteira só de `edit` | **furada** — worker negado no Edit escreveu com `echo >>` |
+| 6 | `edit` + `bash` deny-by-default, com git e a checagem do contrato liberados | segura o caminho legítimo e barra o shell |
+| 7 | `src/x.py` (arquivo único) no mapa de permissão | **bug pego ao vivo**: virava `src/x.py/**` e nunca casava; o worker era negado no próprio arquivo e ia buscar outra porta |
+
+Composição (o que o drill provou que precisa estar verdadeiro, não só gerado):
+`<worktree>/.opencode/opencode.json` escrito pelo guard e em força sem env nenhum
+(`project_config_verified`), `OPENCODE_CONFIG` exportado no pane (`herdr pane run`)
+e conferido no processo, diretório de checkpoints liberado só para escrita do
+checkpoint, e `.opencode/` no `info/exclude` do worktree (o status fica limpo).
+
+Recuperação: `kill -9` no worker → watchdog classifica `agent_gone` → `resume`
+reconstrói branch/worktree/commits/critérios → `replace-worker` entrega o pacote
+(contrato + estado + checkpoint) → substituto termina e **commita** → gate valida.
+No caminho: o pacote ficou sem checkpoint porque o worker ignorou a instrução e,
+depois, porque a regra negava a escrita — o orquestrador passou a **semear** o
+checkpoint no despacho (`checkpoint --set`), e o watchdog ganhou a classificação
+`checkpoint_missing`. O gate recusou corretamente um `result: DONE` cuja checagem
+não passava, e numa das rodadas o "teste" era impossível por contradição entre duas
+asserções que eu mesmo escrevi — daí a regra de rodar o `required_check` contra o
+commit base **antes** de despachar.
+

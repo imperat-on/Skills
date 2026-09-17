@@ -1,7 +1,7 @@
 ---
 name: herdr-orchestrator
 description: "Orchestrate parallel agent teams in Herdr with review."
-version: 1.5.0
+version: 1.6.0
 author: Davi Kolansinsky (imperat-on), Hermes Agent
 license: MIT
 platforms: [linux, macos]
@@ -906,6 +906,32 @@ The skill is working when this scenario completes with real evidence:
 38. Every claimed prevention mechanism is proven in force against the installed binary version
     (`guard --verify-launch` exits 0 with `verified: true`) and the guard artifact the plan points at
     exists on disk; the same claim names that version, so a version change invalidates it.
+44. **A dead worker's pane can keep the agent registered**, and `replace-worker` will refuse with
+    "still live — two writers in one worktree corrupt each other" (correct: that refusal is what stops
+    two writers sharing a worktree). Close that pane (`herdr pane close <pane>`) and give the
+    replacement a fresh pane; an `agent prompt` targeted at the old pane fails with
+    `agent_not_found` after the kill. `herdr agent` has no `stop` subcommand — closing the pane is
+    the way to retire an agent.
+42. **Seed the checkpoint at dispatch, never rely on the worker to create it.** Long tasks get one
+    from the orchestrator (`orch checkpoint --phase 0 ... --commit <base>`) the moment the worktree
+    exists; the worker updates the same file. Two live drills had workers ignore the instruction
+    entirely — one of them because the rules refused the write — and the replacement package said
+    `LATEST CHECKPOINT: none recorded` both times. The watchdog's `checkpoint_missing` covers the
+    worker that never updates it.
+43. **Run every `required_check` against the base commit before dispatching.** A check that cannot
+    pass (contradictory assertions, a missing `tests/__init__.py` so discovery skips the directory, a
+    wrong cwd) makes the gate refuse correct work and burns the worker. One drill shipped two
+    mutually impossible tests; the worker noticed, implemented it right, and the gate still refused.
+41. The write boundary and the checkpoint protocol have to compose: the worker writes its
+    checkpoint OUTSIDE the worktree, so the permission map must allow the checkpoint directory
+    (that glob and nothing else under `.orchestrator/` — `tasks.json`/`state.json` stay denied).
+    Denied, opencode sits at an "Access external directory" dialog and the worker looks alive while
+    nothing progresses: the drill lost 15 minutes that way. `herdr agent list` reports it as
+    `blocked` — check the agent's state while waiting for an artifact, not just the artifact.
+40. `checkpoint_policy: required` is watched: no write/commit for `checkpoint_after` (600s) and no
+    checkpoint on disk classifies as `checkpoint_missing` and the run verdict is `attention` — a kill
+    at that moment forces the replacement to reconstruct from Git alone, and a drill showed workers
+    ignoring the instruction while every other signal stayed green.
 39. The write boundary covers the shell as well as the edit tool (bash deny-by-default with the run's
     own commands allowed), and a bare path in the permission map carries both readings
     (`src/x.py` and `src/x.py/**`).
@@ -923,6 +949,11 @@ If any of those steps cannot be evidenced with real output, the run is not compl
 
 ## References
 
+- `references/runbook.md` — **the sequence I actually run**, in order, copy-pasteable: bootstrap,
+  plan + overlap gate, isolate/record/guard (and why that order is load-bearing), dispatch by pane,
+  mechanical monitoring, independent verification, review with the alternate-screen fallback, gate +
+  merge train on the trunk, kill-9 recovery, cleanup, metrics — plus the four mistakes that cost the
+  most time.
 - `references/herdr-cli-contract.md` — verified command groups, JSON shapes, ID rules, state
   semantics, exit codes, safety rules of the CLI itself.
 - `references/execution-playbook.md` — decomposition, DAG, worktree policy and naming, cwd

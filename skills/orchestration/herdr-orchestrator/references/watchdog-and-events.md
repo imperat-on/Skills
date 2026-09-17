@@ -55,6 +55,9 @@ done               idle agent + a commit recorded -> collect and verify
 idle               idle agent, no commit -> inspect before concluding anything
 blocked            approval/question dialog: a decision point, never completion
 stalled            working, process alive, no commit/checkpoint/output change for > threshold
+checkpoint_missing checkpoint_policy=required, no write/commit for > checkpoint_after (600s) and no
+                   checkpoint on disk -> a kill right now forces reconstruction from Git alone;
+                   nudge the worker, or accept it and record that you did
 process_dead       the pane's foreground process is not the worker CLI anymore
 agent_gone         recorded agent no longer in `herdr agent list` -> interrupted
 pane_missing       recorded pane absent from the runtime

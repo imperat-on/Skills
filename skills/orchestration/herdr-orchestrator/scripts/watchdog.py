@@ -59,6 +59,7 @@ DEFAULT_STALL_AFTER = 900        # seconds without any observed activity before 
 DEFAULT_DEAD_GRACE = 60          # seconds a recorded agent may be missing before "agent_gone"
 DEFAULT_IDLE_GRACE = 60          # seconds idle with no commit before it is worth flagging
 DEFAULT_SPIN_AFTER = 1800        # seconds of visible activity with ZERO file change/commit -> "spinning"
+DEFAULT_CHECKPOINT_AFTER = 600   # checkpoint_policy=required and nothing on disk after this -> flag it
 MIN_INTERVAL = 5
 WATCHDOG_DIR = Path(".orchestrator") / "watchdog"
 
@@ -311,6 +312,7 @@ def sample_task(root: Path, task: dict, snap: dict, prev: dict | None, *, use_he
     signals["workspace_present"] = ((task.get("workspace") in snap["workspaces"])
                                     if (task.get("workspace") and snap["workspaces"]) else None)
     signals["worktree_exists"] = worktree.is_dir() if worktree else None
+    contract = load_contract(root, task)      # needed by the scope check and the checkpoint policy
 
     activity = []
     if worktree and worktree.is_dir():
@@ -336,7 +338,6 @@ def sample_task(root: Path, task: dict, snap: dict, prev: dict | None, *, use_he
                 if write_ts:
                     signals["last_write_ts"] = iso(write_ts)
                     activity.append(write_ts)
-            contract = load_contract(root, task)
             if contract and paths and classify_paths is not None:
                 cls = classify_paths(paths, contract)
                 if cls["violations"]:
@@ -432,6 +433,13 @@ def sample_task(root: Path, task: dict, snap: dict, prev: dict | None, *, use_he
                                 f"change and no commit (threshold {thresholds['spin_after']}s): the "
                                 f"worker is reading/measuring, not delivering -> inspect, then narrow "
                                 f"the contract or replace the worker")
+    elif ((contract or {}).get("checkpoint_policy") == "required" and cts is None
+          and out.get("seconds_since_write") is not None
+          and out["seconds_since_write"] > thresholds["checkpoint_after"]):
+        cls, why = "checkpoint_missing", (
+            f"checkpoint_policy=required but no checkpoint after {out['seconds_since_write']}s "
+            f"(threshold {thresholds['checkpoint_after']}s): a worker killed now would leave the "
+            f"replacement to reconstruct from Git alone -> nudge it, or accept and record that")
     else:
         cls, why = "healthy", "recent activity observed and no blocking signal"
     if cls in (None, "unknown") and out["scope_violation"]:
@@ -455,7 +463,8 @@ def sample(root: Path, *, use_herdr: bool = True, fixture: str | None = None,
     root = Path(root).expanduser().resolve()
     state, tasks = load_state(root)
     limits = {"stall_after": DEFAULT_STALL_AFTER, "dead_grace": DEFAULT_DEAD_GRACE,
-              "idle_grace": DEFAULT_IDLE_GRACE, "spin_after": DEFAULT_SPIN_AFTER}
+              "idle_grace": DEFAULT_IDLE_GRACE, "spin_after": DEFAULT_SPIN_AFTER,
+              "checkpoint_after": DEFAULT_CHECKPOINT_AFTER}
     limits.update({k: v for k, v in (state.get("watchdog") or {}).items() if isinstance(v, int)})
     limits.update(thresholds or {})
     events = read_events(root)
@@ -477,7 +486,8 @@ def sample(root: Path, *, use_herdr: bool = True, fixture: str | None = None,
 
     needs_attention = [r for r in rows if r["classification"] in
                        ("blocked", "stalled", "spinning", "process_dead", "agent_gone", "pane_missing",
-                        "workspace_missing", "worktree_missing", "scope_violation")]
+                        "workspace_missing", "worktree_missing", "scope_violation",
+                        "checkpoint_missing")]
     report = {
         "run_id": state.get("run_id"),
         "repo": str(root),

@@ -48,7 +48,7 @@ from contracts import (  # noqa: E402
 # scope violation on both workers, which is noise that hides real violations. A run can add more
 # with `ignore_scope` in the contract.
 ALWAYS_IGNORED = [
-    ".orchestrator/**", ".git/**",
+    ".orchestrator/**", ".git/**", "**/.opencode/**",
     "**/__pycache__/**", "**/*.pyc", "**/*.pyo",
     "**/node_modules/**", "**/.venv/**", "**/venv/**",
     "**/.pytest_cache/**", "**/.mypy_cache/**", "**/.ruff_cache/**", "**/.cache/**",
@@ -520,7 +520,56 @@ KIND_ADAPTERS = {
 }
 
 
-def opencode_permission(contract: dict) -> dict:
+def write_project_permission(contract: dict, permission: dict) -> str | None:
+    """Write the run-owned `.opencode/opencode.json` inside the worktree, excluded from git status.
+
+    A generated file that nothing loads is decoration; this one is loaded by opencode because the
+    worker's cwd IS the worktree. The file must not make the worktree read as dirty, so it goes into
+    the worktree's own exclude (`git rev-parse --git-path info/exclude`), never the shared config.
+    """
+    wt = contract.get("worktree")
+    if not wt or not Path(str(wt)).is_dir():
+        return None
+    proj = Path(str(wt)) / ".opencode" / "opencode.json"
+    try:
+        proj.parent.mkdir(parents=True, exist_ok=True)
+        proj.write_text(json.dumps({"permission": permission}, indent=2) + "\n", encoding="utf-8")
+        ex = subprocess.run(["git", "rev-parse", "--git-path", "info/exclude"], cwd=str(wt),
+                            capture_output=True, text=True, timeout=30)
+        if ex.returncode == 0:
+            path = Path(ex.stdout.strip())
+            if not path.is_absolute():
+                path = Path(str(wt)) / path
+            body = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
+            if ".opencode/" not in body:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with path.open("a", encoding="utf-8") as fh:
+                    fh.write("\n# run-owned: worker write boundary (.orchestrator guards)\n.opencode/\n")
+        return str(proj)
+    except OSError:
+        return None
+
+
+def orchestrator_dir(anchor) -> str | None:
+    """The run's `.orchestrator` directory, found from any path that lives inside the repo.
+
+    The checkpoint protocol writes outside the worktree, so the permission map needs that path in
+    absolute form — and it must be derived from the same root the guard was installed from.
+    """
+    if not anchor:
+        return None
+    p = Path(str(anchor)).expanduser()
+    try:
+        p = p.resolve()
+    except OSError:
+        return None
+    for cand in [p, *p.parents]:
+        if (cand / ".orchestrator").is_dir():
+            return str(cand / ".orchestrator")
+    return None
+
+
+def opencode_permission(contract: dict, *, checkpoint_dir=None) -> dict:
     """Build the opencode permission block: deny every edit, then allow the contracted tree.
 
     Order matters: opencode resolves the last matching rule, so forbidden_scope denials are written
@@ -555,14 +604,23 @@ def opencode_permission(contract: dict) -> dict:
         cmd = str(check).strip()
         if cmd:
             bash[cmd if cmd.endswith("*") else cmd + "*"] = "allow"
+    # The checkpoint protocol asks the worker to write OUTSIDE its worktree. Denied, opencode stops
+    # at an "Access external directory" dialog and the worker sits there looking alive (live drill:
+    # the checkpoint never appeared and the task looked healthy). So the checkpoint directory is the
+    # one thing outside the scope that is allowed -- nothing else under .orchestrator/ is.
+    external_directory = {"*": "deny"}
+    if checkpoint_dir:
+        ext = str(checkpoint_dir).rstrip("/") + "/*"
+        edit[ext] = "allow"
+        external_directory[ext] = "allow"
     return {
         "edit": edit,
-        "external_directory": {"*": "deny"},
+        "external_directory": external_directory,
         "bash": bash,
     }
 
 
-def plan_prevention(contract: dict, kind: str, *, out_dir) -> dict:
+def plan_prevention(contract: dict, kind: str, *, out_dir, worktree=None) -> dict:
     """Write the run-owned guard artifacts for one worker kind. No secrets, no project edits."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -612,15 +670,24 @@ def plan_prevention(contract: dict, kind: str, *, out_dir) -> dict:
         plan["artifacts"].append(str(plan_file))
         return plan
     if adapter["write_boundary"] == "sub-path":
-        permission = opencode_permission(contract)
+        orch = orchestrator_dir(out_dir)
+        permission = opencode_permission(
+            contract, checkpoint_dir=(str(Path(orch) / "checkpoints") if orch else None))
         permission_file = out_dir / "opencode-permission.json"
         permission_file.write_text(json.dumps({"permission": permission}, indent=2) + "\n",
                                    encoding="utf-8")
         env_value = str(permission_file) if adapter.get("env_is_file") else \
             json.dumps(permission, separators=(",", ":"))
+        # Belt as well as braces: opencode also reads `.opencode/opencode.json` from the PROJECT
+        # (verified with `opencode debug config` in a worktree on 1.18.31). Writing it makes the
+        # boundary hold even when nobody exports the env var — the exact failure of the first drill,
+        # where the worker sat at an "Access external directory" dialog with nothing in force.
+        wt = worktree or contract.get("worktree")
+        project_config = write_project_permission({**contract, "worktree": wt}, permission)
         plan.update({
             "prevention": "mechanical",
             "launch_env": {adapter["env_var"]: env_value},
+            "project_config": project_config,
             "launch_env_export": [f"export {adapter['env_var']}={shlex.quote(env_value)}"],
             "verification": {
                 "exists": bool(adapter.get("probe")),
@@ -659,7 +726,8 @@ def plan_prevention(contract: dict, kind: str, *, out_dir) -> dict:
     return plan
 
 
-def verify_launch(contract: dict, kind: str, *, cwd=None, observed: str | None = None) -> dict:
+def verify_launch(contract: dict, kind: str, *, cwd=None, observed: str | None = None,
+                  worktree=None) -> dict:
     """Prove the prevention is actually in force before the worker is trusted.
 
     - `observed` given: compare it against the intended payload (the orchestrator echoes the worker's
@@ -676,7 +744,10 @@ def verify_launch(contract: dict, kind: str, *, cwd=None, observed: str | None =
         result["reasons"].append(f"no verifiable write-boundary mechanism for kind {kind!r}")
         return result
 
-    permission = opencode_permission(contract)
+    wt = worktree or contract.get("worktree")
+    orch = orchestrator_dir(wt or cwd)
+    permission = opencode_permission(
+        contract, checkpoint_dir=(str(Path(orch) / "checkpoints") if orch else None))
     intended = json.dumps(permission, separators=(",", ":"))
 
     if observed is not None:
@@ -748,6 +819,27 @@ def verify_launch(contract: dict, kind: str, *, cwd=None, observed: str | None =
     if effective_perm.get("external_directory") and \
             effective_perm["external_directory"].get("*") != "deny":
         result["reasons"].append("effective config does not deny external directories")
+    if orch:
+        ck_glob = str(Path(orch) / "checkpoints" / "*")
+        if (effective_perm.get("edit") or {}).get(ck_glob) != "allow":
+            result["reasons"].append("effective config does not allow the checkpoint directory "
+                                     "(the worker would stop at an approval dialog)")
+    # The mechanism that does not depend on anyone exporting anything: the PROJECT config inside the
+    # worktree. Probed with the env var removed, so it proves the file alone is in force.
+    proj = (Path(str(wt)) / ".opencode" / "opencode.json") if wt else None
+    result["project_config"] = str(proj) if proj and proj.is_file() else None
+    if proj and proj.is_file() and cwd:
+        bare_env = {k: v for k, v in os.environ.items() if k != adapter["env_var"]}
+        try:
+            bare = subprocess.run(probe, cwd=str(cwd), capture_output=True, text=True, timeout=120,
+                                  env=bare_env)
+            bare_perm = json.loads(bare.stdout).get("permission") or {} if bare.returncode == 0 else {}
+            result["project_config_verified"] = bool((bare_perm.get("edit") or {}).get("*") == "deny")
+            if not result["project_config_verified"]:
+                result["reasons"].append("the project config in the worktree is not in force: the "
+                                         "probe without the env var saw no rules")
+        except (OSError, subprocess.TimeoutExpired, ValueError):
+            result["project_config_verified"] = False
     result["verified"] = not result["reasons"]
     return result
 

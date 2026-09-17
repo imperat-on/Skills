@@ -1111,12 +1111,13 @@ def cmd_guard(a) -> int:
             rc = 1
     if a.plan:
         out["prevention_plan"] = SG.plan_prevention(
-            contract, kind, out_dir=root / ".orchestrator" / "guards" / a.id)
+            contract, kind, out_dir=root / ".orchestrator" / "guards" / a.id, worktree=str(worktree))
         if out["prevention_plan"]["prevention"] == "none":
             log_event(root, "scope_guard_unavailable", task=a.id, kind=kind,
                       reason="no verified write-boundary mechanism")
     if a.verify_launch:
-        verified = SG.verify_launch(contract, kind, cwd=a.cwd or str(worktree), observed=a.observed)
+        verified = SG.verify_launch(contract, kind, cwd=a.cwd or str(worktree), observed=a.observed,
+                                 worktree=str(worktree))
         out["launch_verification"] = verified
         log_event(root, "launch_verified" if verified["verified"] else "scope_guard_unavailable",
                   task=a.id, kind=kind, mechanism=verified.get("mechanism"),
