@@ -211,3 +211,26 @@ Apontadas com número medido, para decidir depois:
 *Reprodução: `gh api repos/<repo>`, clones `--depth 1`, `python3 tools/validate-skills.py`,
 `bash tools/test-hooks.sh`, `python3 tools/gen-mcp-configs.py`. Os dossiês em `research/`
 foram escritos por cinco frentes de pesquisa paralelas em 2026-09-16.*
+
+## Verificação ao vivo — OpenCode 1.18.31 (2026-09-17)
+
+Instalado e exercitado numa CLI que não é o Hermes, para provar que o kit não é
+"funciona só onde foi escrito". Comandos e saídas reais:
+
+| # | O que | Comando | Resultado |
+|---|---|---|---|
+| 1 | Descoberta de skills | `opencode run 'Liste 5 skills que voce tem disponiveis'` | listou `accessibility`, `caveman`, `ponytail`, `brainstorming`, `systematic-debugging` |
+| 2 | Modos sempre ativos | `opencode run 'Quais modos estao ativos por padrao?'` | *"lazy senior (`ponytail`) + caveman. Sempre ativos; só suspendem se pedir modo normal"* — leu o bloco de `~/.config/opencode/AGENTS.md` |
+| 3 | Guard de hook | `opencode run 'Execute: rm -rf ~/nao-existe-teste-opencode-xyz'` | **bloqueado**: `BLOQUEADO pelo guard-dangerous: rm -rf recursivo dentro do home`; pasta não existe (nada executou) |
+| 4 | MCP | `.opencode/opencode.json` com o servidor `time` + `opencode run 'Que horas sao em Sao Paulo?'` | chamou `time_get_current_time` e respondeu `04:55` |
+
+Instalação usada: `./install.sh --tier core --target agents` (32 instaladas, 3 já
+existiam) + `./hooks/install-hooks.sh --only opencode`.
+
+**Caminhos confirmados na doc oficial** (opencode.ai/docs/skills): OpenCode lê
+`~/.config/opencode/skills/`, `~/.claude/skills/` e `~/.agents/skills/`, e exige
+`name` igual ao nome da pasta — a mesma regra que o `validate-skills.py` já cobra.
+
+**Lacuna conhecida:** chamada *bloqueada* não entra em `audit.jsonl` (o log é
+pós-execução; o bloqueio acontece antes). O agente vê a mensagem, mas o histórico
+não registra a tentativa. Corrigível pondo um `log` dentro do guard.

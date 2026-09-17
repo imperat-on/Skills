@@ -157,6 +157,10 @@ bash tools/test-hooks.sh            # comportamental: os 52 casos dos hooks
 Ambos são stdlib-only. Estado atual nesta máquina: **146 skills, 0 erros, 0
 avisos; 52/52 casos de hook passando.**
 
+Verificado ao vivo em **duas** CLIs: Hermes Agent e **OpenCode 1.18.31** (skills,
+modos sempre ativos, guard bloqueando `rm -rf` e servidor MCP respondendo —
+comandos e saídas no [REPORT.md](REPORT.md)).
+
 ## Manter e atualizar
 
 ```bash
