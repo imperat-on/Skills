@@ -64,27 +64,40 @@ skills_dir() {
   esac
 }
 
+# Reescreve o arquivo com o bloco exatamente uma vez. Feito em Python para o
+# resultado ser byte-a-byte estável: rodar duas vezes tem que dar o MESMO arquivo
+# (a versão em awk/sed acrescentava 1 byte por execução).
+build_with_block() { # <arquivo> <tmp> <titulo>
+  local f="$1" tmp="$2" title="$3"
+  SKILLS_KIT_FILE="$f" SKILLS_KIT_BLOCK="$BLOCK" SKILLS_KIT_TITLE="$title" SKILLS_KIT_TMP="$tmp"   python3 - <<'PY'
+import os, pathlib, re
+f = pathlib.Path(os.environ["SKILLS_KIT_FILE"])
+block = pathlib.Path(os.environ["SKILLS_KIT_BLOCK"]).read_text(encoding="utf-8").strip() + "\n"
+out = pathlib.Path(os.environ["SKILLS_KIT_TMP"])
+t = f.read_text(encoding="utf-8") if f.exists() else ""
+t = re.sub(r"<!-- skills-kit:always-on -->.*?<!-- /skills-kit:always-on -->\n?", "", t, flags=re.S)
+t = t.rstrip()
+if not t:
+    t = os.environ["SKILLS_KIT_TITLE"]
+out.write_text(t.rstrip() + "\n\n" + block, encoding="utf-8")
+PY
+}
+
+strip_block() { # <arquivo> <tmp>
+  local f="$1" tmp="$2"
+  SKILLS_KIT_FILE="$f" SKILLS_KIT_TMP="$tmp" python3 - <<'PY'
+import os, pathlib, re
+f = pathlib.Path(os.environ["SKILLS_KIT_FILE"])
+t = re.sub(r"<!-- skills-kit:always-on -->.*?<!-- /skills-kit:always-on -->\n?", "",
+           f.read_text(encoding="utf-8"), flags=re.S).rstrip()
+pathlib.Path(os.environ["SKILLS_KIT_TMP"]).write_text((t + "\n") if t else "", encoding="utf-8")
+PY
+}
+
 apply_block() { # <arquivo> <cli>
   local f="$1" cli="$2" tmp
   tmp="$(mktemp)"
-  if [ ! -e "$f" ]; then
-    # arquivo novo: começa com um título para não virar um .md órfão
-    { echo "# Instruções globais — $(basename "$(dirname "$f")")"; echo; } > "$tmp"
-    cat "$BLOCK" >> "$tmp"
-  elif grep -qF "$START" "$f"; then
-    # já existe: substitui o bloco inteiro (idempotente)
-    awk -v s="$START" -v e="$END" '
-      $0 == s {skip=1; next}
-      $0 == e {skip=0; next}
-      !skip {print}
-    ' "$f" > "$tmp"
-    printf '\n' >> "$tmp"
-    cat "$BLOCK" >> "$tmp"
-  else
-    cat "$f" > "$tmp"
-    printf '\n' >> "$tmp"
-    cat "$BLOCK" >> "$tmp"
-  fi
+  build_with_block "$f" "$tmp" "# Instruções globais — $(basename "$(dirname "$f")")"
   if [ "$DRY" = "1" ]; then
     echo "  DRY  escreveria $(wc -c < "$tmp") bytes em $f"
   else
@@ -102,7 +115,7 @@ remove_block() { # <arquivo>
   grep -qF "$START" "$f" || return 0
   if [ "$DRY" = "1" ]; then echo "  DRY  removeria o bloco de $f"; return 0; fi
   cp -a "$f" "$f.bak-$STAMP"
-  awk -v s="$START" -v e="$END" '$0 == s {skip=1; next} $0 == e {skip=0; next} !skip {print}' "$f" > "$f.tmp"
+  strip_block "$f" "$f.tmp"
   mv "$f.tmp" "$f"
   # se o arquivo ficou vazio (só o bloco), remove
   if [ ! -s "$f" ] || [ "$(tr -d '[:space:]' < "$f" | wc -c)" = "0" ]; then rm -f "$f"; echo "  removido (arquivo ficou vazio): $f"; else echo "  bloco removido de $f"; fi
@@ -132,7 +145,7 @@ for cli in claude codex opencode prime hermes; do
     sd="$(skills_dir "$cli")"
     for s in ponytail caveman; do
       if [ -n "$sd" ] && [ -d "$sd/$s" ]; then :
-      elif [ -n "$sd" ] && find "$sd" -maxdepth 3 -type d -name "$s" 2>/dev/null | grep -q .; then :
+      elif [ -n "$sd" ] && find "$sd" -maxdepth 3 \( -type d -o -type l \) -name "$s" 2>/dev/null | grep -q .; then :
       else echo "  aviso: skill '$s' nao esta instalada em $sd — rode ./install.sh --tier all"; fi
     done
     installed=$((installed+1))
